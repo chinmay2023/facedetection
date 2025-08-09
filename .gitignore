@@ -17,4 +17,4 @@ staticfiles/
 
 # Virtualenv
 .env/
-venv/
+venv
