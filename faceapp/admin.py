@@ -1,4 +1,4 @@
-# faceapp/admin.py - SIMPLIFIED PLAIN TEXT VERSION
+# faceapp/admin.py - ENHANCED VERSION WITH NEW REPEATER COLUMNS DISPLAY
 from django.contrib import admin
 from django.utils import timezone
 from django.contrib import messages
@@ -11,9 +11,13 @@ from .models import (
 from .utils import encode_face_image
 import pytz
 
+
+
 # ================================
-# KNOWN PERSON ADMIN - SIMPLE VERSION
+# KNOWN PERSON ADMIN - FIXED COMPLETED SESSIONS DISPLAY
 # ================================
+
+
 
 @admin.register(KnownPerson)
 class KnownPersonAdmin(admin.ModelAdmin):
@@ -24,6 +28,8 @@ class KnownPersonAdmin(admin.ModelAdmin):
         'gender',
         'shivir',
         'get_spiritual_level',
+        'next_eligible_session',        
+        'completed_sessions_display',   # ← FIXED METHOD
         'get_total_attendance',
         'activation_status',
         'blacklist_status',
@@ -105,6 +111,98 @@ class KnownPersonAdmin(admin.ModelAdmin):
         return level if level else "New User"
     get_spiritual_level.short_description = 'Spiritual Level'
     
+    @admin.display(description='Next Eligible')
+    def next_eligible_session(self, obj):
+        """Show the next session this user is eligible to attend"""
+        progression_order = ['MA', 'SSP1', 'SSP2', 'HS1', 'HS2']
+        current_level = obj.get_shivir_background_level()
+        
+        if not current_level:
+            return "MA"
+        
+        try:
+            current_index = progression_order.index(current_level)
+            if current_index + 1 < len(progression_order):
+                return progression_order[current_index + 1]
+            else:
+                return "All Sessions Complete"
+        except ValueError:
+            return "MA"
+    
+    # 🚀 FIXED: Enhanced Completed Sessions Display Method
+    @admin.display(description='Completed Sessions')
+    def completed_sessions_display(self, obj):
+        """Show which sessions user has completed - ENHANCED VERSION"""
+        completed = []
+        
+        # Check MA attendance - look for any completed records OR any attendance at all
+        ma_completed = MA_Attendance.objects.filter(person=obj, is_completed=True).exists()
+        ma_any_attendance = MA_Attendance.objects.filter(person=obj).exists()
+        
+        if ma_completed:
+            completed.append('MA ✓')  # Officially completed
+        elif ma_any_attendance:
+            # Check if they have attended enough days to be considered complete
+            ma_count = MA_Attendance.objects.filter(person=obj).count()
+            if ma_count >= 5:  # MA requires 5 days
+                completed.append('MA (5/5)')
+            else:
+                completed.append(f'MA ({ma_count}/5)')
+        
+        # Check SSP1 attendance
+        ssp1_completed = SSP1_Attendance.objects.filter(person=obj, is_completed=True).exists()
+        ssp1_any_attendance = SSP1_Attendance.objects.filter(person=obj).exists()
+        
+        if ssp1_completed:
+            completed.append('SSP1 ✓')
+        elif ssp1_any_attendance:
+            ssp1_count = SSP1_Attendance.objects.filter(person=obj).count()
+            if ssp1_count >= 2:  # SSP1 requires 2 days
+                completed.append('SSP1 (2/2)')
+            else:
+                completed.append(f'SSP1 ({ssp1_count}/2)')
+        
+        # Check SSP2 attendance
+        ssp2_completed = SSP2_Attendance.objects.filter(person=obj, is_completed=True).exists()
+        ssp2_any_attendance = SSP2_Attendance.objects.filter(person=obj).exists()
+        
+        if ssp2_completed:
+            completed.append('SSP2 ✓')
+        elif ssp2_any_attendance:
+            ssp2_count = SSP2_Attendance.objects.filter(person=obj).count()
+            if ssp2_count >= 2:  # SSP2 requires 2 days
+                completed.append('SSP2 (2/2)')
+            else:
+                completed.append(f'SSP2 ({ssp2_count}/2)')
+        
+        # Check HS1 attendance
+        hs1_completed = HS1_Attendance.objects.filter(person=obj, is_completed=True).exists()
+        hs1_any_attendance = HS1_Attendance.objects.filter(person=obj).exists()
+        
+        if hs1_completed:
+            completed.append('HS1 ✓')
+        elif hs1_any_attendance:
+            hs1_count = HS1_Attendance.objects.filter(person=obj).count()
+            if hs1_count >= 2:  # HS1 requires 2 days
+                completed.append('HS1 (2/2)')
+            else:
+                completed.append(f'HS1 ({hs1_count}/2)')
+        
+        # Check HS2 attendance
+        hs2_completed = HS2_Attendance.objects.filter(person=obj, is_completed=True).exists()
+        hs2_any_attendance = HS2_Attendance.objects.filter(person=obj).exists()
+        
+        if hs2_completed:
+            completed.append('HS2 ✓')
+        elif hs2_any_attendance:
+            hs2_count = HS2_Attendance.objects.filter(person=obj).count()
+            if hs2_count >= 2:  # HS2 requires 2 days
+                completed.append('HS2 (2/2)')
+            else:
+                completed.append(f'HS2 ({hs2_count}/2)')
+        
+        return ", ".join(completed) if completed else "None"
+    
     def get_total_attendance(self, obj):
         """Display total attendance count"""
         total = Attendance.objects.filter(person=obj).count()
@@ -171,9 +269,12 @@ class KnownPersonAdmin(admin.ModelAdmin):
         self.message_user(request, f"{count} person(s) removed from blacklist.", messages.SUCCESS)
     unblacklist_selected.short_description = "Remove from blacklist"
 
+
+
 # ================================
-# ATTENDANCE ADMIN - SIMPLE VERSION
+# ATTENDANCE ADMIN CLASSES
 # ================================
+
 
 @admin.register(Attendance)
 class AttendanceAdmin(admin.ModelAdmin):
@@ -240,9 +341,7 @@ class AttendanceAdmin(admin.ModelAdmin):
             return "Valid"
     person_status.short_description = 'Status'
 
-# ================================
-# SESSION-SPECIFIC ATTENDANCE ADMINS - SIMPLE VERSION
-# ================================
+
 
 class BaseSessionAttendanceAdmin(admin.ModelAdmin):
     list_display = [
@@ -275,78 +374,184 @@ class BaseSessionAttendanceAdmin(admin.ModelAdmin):
         return "No reference"
     session_reference_name.short_description = 'Session Reference'
 
+
+
 @admin.register(MA_Attendance)
 class MA_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
+
+
 
 @admin.register(SSP1_Attendance) 
 class SSP1_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
 
+
+
 @admin.register(SSP2_Attendance)
 class SSP2_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
+
+
 
 @admin.register(HS1_Attendance)
 class HS1_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
 
+
+
 @admin.register(HS2_Attendance)
 class HS2_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
 
+
+
 # ================================
-# REPEATER ADMINS - SIMPLE VERSION
+# ✅ ENHANCED REPEATER ADMIN CLASSES WITH NEW COLUMNS
 # ================================
+
 
 class BaseRepeaterAdmin(admin.ModelAdmin):
     list_display = [
         'person_name',
         'repeat_attendance_date',
+        'get_session_progress',  # ✅ NEW: Shows "Day X/Y"
+        'get_completion_status',  # ✅ NEW: Shows completion status
+        'session_reference_display',  # ✅ NEW: Shows linked session
         'previous_attendance_date',
         'days_gap',
         'repeat_count'
     ]
     list_filter = [
+        'is_completed',  # ✅ NEW: Filter by completion status
+        'day_number',    # ✅ NEW: Filter by day number
         'repeat_attendance_date',
         'days_gap',
         'repeat_count',
         'person__is_active',
-        'person__is_blacklisted'
+        'person__is_blacklisted',
+        'session_reference__session_type'  # ✅ NEW: Filter by session type
     ]
-    search_fields = ['person__name', 'person__email']
+    search_fields = ['person__name', 'person__email', 'session_reference__session_name']
     ordering = ['-repeat_attendance_date', 'person__name']
     date_hierarchy = 'repeat_attendance_date'
-    list_select_related = ['person']
+    list_select_related = ['person', 'session_reference']  # ✅ NEW: Include session_reference
     
     def person_name(self, obj):
         return obj.person.name if obj.person else "Unknown"
     person_name.short_description = 'Person Name'
     person_name.admin_order_field = 'person__name'
+    
+    # ✅ NEW: Display session progress (Day X/Y)
+    def get_session_progress(self, obj):
+        """Show session day progression like 'Day 2/5' or 'Day 1/2'"""
+        # Determine session duration based on the model type
+        model_name = obj.__class__.__name__
+        if 'MA' in model_name:
+            total_days = 5
+        else:  # SSP1, SSP2, HS1, HS2
+            total_days = 2
+        
+        return f"Day {obj.day_number}/{total_days}"
+    get_session_progress.short_description = 'Session Progress'
+    get_session_progress.admin_order_field = 'day_number'
+    
+    # ✅ NEW: Display completion status with visual indicators
+    def get_completion_status(self, obj):
+        """Show completion status with checkmarks"""
+        if obj.is_completed:
+            return " Completed"
+        else:
+            return " In Progress"
+    get_completion_status.short_description = 'Completion Status'
+    get_completion_status.admin_order_field = 'is_completed'
+    
+    # ✅ NEW: Display linked session information
+    def session_reference_display(self, obj):
+        """Show linked session information"""
+        if obj.session_reference:
+            return f"{obj.session_reference.session_name} ({obj.session_reference.session_type})"
+        return "No Session Linked"
+    session_reference_display.short_description = 'Linked Session'
+    session_reference_display.admin_order_field = 'session_reference__session_name'
 
+
+
+# ✅ ENHANCED: All Repeater Admin Classes with Session-Specific Details
 @admin.register(MA_Repeaters)
 class MA_RepeatersAdmin(BaseRepeaterAdmin):
-    pass
+    list_display = BaseRepeaterAdmin.list_display + ['get_ma_specific_info']
+    
+    def get_ma_specific_info(self, obj):
+        """MA-specific information"""
+        if obj.is_completed:
+            return f"MA Repeat {obj.repeat_count} "
+        else:
+            return f"MA Repeat {obj.repeat_count} - Day {obj.day_number}/5"
+    get_ma_specific_info.short_description = 'MA Details'
+
+
 
 @admin.register(SSP1_Repeaters)
 class SSP1_RepeatersAdmin(BaseRepeaterAdmin):
-    pass
+    list_display = BaseRepeaterAdmin.list_display + ['get_ssp1_specific_info']
+    
+    def get_ssp1_specific_info(self, obj):
+        """SSP1-specific information"""
+        if obj.is_completed:
+            return f"SSP1 Repeat {obj.repeat_count} "
+        else:
+            return f"SSP1 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
+    get_ssp1_specific_info.short_description = 'SSP1 Details'
+
+
 
 @admin.register(SSP2_Repeaters)
 class SSP2_RepeatersAdmin(BaseRepeaterAdmin):
-    pass
+    list_display = BaseRepeaterAdmin.list_display + ['get_ssp2_specific_info']
+    
+    def get_ssp2_specific_info(self, obj):
+        """SSP2-specific information"""
+        if obj.is_completed:
+            return f"SSP2 Repeat {obj.repeat_count} "
+        else:
+            return f"SSP2 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
+    get_ssp2_specific_info.short_description = 'SSP2 Details'
+
+
 
 @admin.register(HS1_Repeaters)
 class HS1_RepeatersAdmin(BaseRepeaterAdmin):
-    pass
+    list_display = BaseRepeaterAdmin.list_display + ['get_hs1_specific_info']
+    
+    def get_hs1_specific_info(self, obj):
+        """HS1-specific information"""
+        if obj.is_completed:
+            return f"HS1 Repeat {obj.repeat_count} "
+        else:
+            return f"HS1 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
+    get_hs1_specific_info.short_description = 'HS1 Details'
+
+
 
 @admin.register(HS2_Repeaters)
 class HS2_RepeatersAdmin(BaseRepeaterAdmin):
-    pass
+    list_display = BaseRepeaterAdmin.list_display + ['get_hs2_specific_info']
+    
+    def get_hs2_specific_info(self, obj):
+        """HS2-specific information"""
+        if obj.is_completed:
+            return f"HS2 Repeat {obj.repeat_count} "
+        else:
+            return f"HS2 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
+    get_hs2_specific_info.short_description = 'HS2 Details'
+
+
 
 # ================================
-# TEJGYAN SESSION ADMIN - SIMPLE VERSION
+# TEJGYAN SESSION ADMIN
 # ================================
+
 
 @admin.register(TejgyanSession)
 class TejgyanSessionAdmin(admin.ModelAdmin):
@@ -381,7 +586,6 @@ class TejgyanSessionAdmin(admin.ModelAdmin):
     
     def save_model(self, request, obj, form, change):
         if obj.is_active:
-            # Deactivate all other sessions before activating this one
             previously_active = TejgyanSession.objects.filter(is_active=True).exclude(pk=obj.pk)
             deactivated_count = previously_active.count()
             previously_active.update(is_active=False)
@@ -403,7 +607,6 @@ class TejgyanSessionAdmin(admin.ModelAdmin):
         else:
             super().save_model(request, obj, form, change)
     
-    # Admin actions
     actions = ['activate_selected_session', 'deactivate_all_sessions']
     
     def activate_selected_session(self, request, queryset):
@@ -437,9 +640,7 @@ class TejgyanSessionAdmin(admin.ModelAdmin):
         )
     deactivate_all_sessions.short_description = "Deactivate all sessions"
 
-# ================================
-# ADMIN SITE CUSTOMIZATION
-# ================================
+
 
 admin.site.site_header = "Tejgyan Foundation - Face Recognition Attendance System"
 admin.site.site_title = "Tejgyan Foundation Admin"
