@@ -5,6 +5,7 @@ import pytz  # ✅ For timezone conversion
 from django.utils import timezone  # ✅ For timezone handling
 
 
+
 class KnownPerson(models.Model):
     GENDER_CHOICES = [
         ('M', 'Male'),
@@ -28,6 +29,7 @@ class KnownPerson(models.Model):
     is_active = models.BooleanField(default=True, help_text="Designates whether this user is active. Inactive users won't appear in face recognition.")
     deactivated_date = models.DateTimeField(blank=True, null=True, help_text="Date when person was deactivated")
     deactivated_reason = models.CharField(max_length=200, blank=True, null=True, help_text="Reason for deactivation")
+
 
     def __str__(self):
         status_parts = []
@@ -317,7 +319,9 @@ class KnownPerson(models.Model):
         return summary
 
 
+
 # 🗄️ SEPARATE REGULAR ATTENDANCE TABLES FOR EACH SESSION TYPE
+
 
 class MA_Attendance(models.Model):
     """Track daily MA Shivir attendance (5 days total)"""
@@ -365,6 +369,7 @@ class MA_Attendance(models.Model):
                 print(f"✅ Shivir field automatically updated for {self.person.name}")
 
 
+
 class SSP1_Attendance(models.Model):
     """Track daily SSP1 attendance (2 days total)"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='ssp1_attendance')
@@ -401,6 +406,7 @@ class SSP1_Attendance(models.Model):
         if self.is_completed and not was_completed_before:
             print(f"🎉 SSP1 completed for {self.person.name}! Triggering auto-update...")
             self.person.update_shivir_field_on_completion('SSP1')
+
 
 
 class SSP2_Attendance(models.Model):
@@ -441,6 +447,7 @@ class SSP2_Attendance(models.Model):
             self.person.update_shivir_field_on_completion('SSP2')
 
 
+
 class HS1_Attendance(models.Model):
     """Track daily Higher Shivir 1 attendance (2 days total)"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='hs1_attendance')
@@ -477,6 +484,7 @@ class HS1_Attendance(models.Model):
         if self.is_completed and not was_completed_before:
             print(f"🎉 HS1 completed for {self.person.name}! Triggering auto-update...")
             self.person.update_shivir_field_on_completion('HS1')
+
 
 
 class HS2_Attendance(models.Model):
@@ -517,16 +525,23 @@ class HS2_Attendance(models.Model):
             self.person.update_shivir_field_on_completion('HS2')
 
 
-# 🔄 SEPARATE REPEATER TABLES FOR EACH SESSION TYPE
+
+# 🔄 ENHANCED REPEATER TABLES WITH SESSION TRACKING COLUMNS
+
 
 class MA_Repeaters(models.Model):
-    """Track MA Shivir repeat attendance with dynamic days gap"""
+    """Track MA Shivir repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='ma_repeaters')
     previous_attendance_date = models.DateField(help_text="When they last completed MA")
     repeat_attendance_date = models.DateField(auto_now_add=True, help_text="Today's repeat attendance")
     days_gap = models.IntegerField(help_text="Days between last completion and repeat")
     repeat_count = models.IntegerField(default=1, help_text="1st repeat, 2nd repeat, etc.")
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # ✅ NEW COLUMNS ADDED - Same as regular session tables
+    day_number = models.IntegerField(default=1, help_text="Day 1, 2, 3, 4, or 5 of MA repeat")
+    is_completed = models.BooleanField(default=False, help_text="True when repeat session completed")
+    session_reference = models.ForeignKey('TejgyanSession', on_delete=models.CASCADE, null=True, blank=True, help_text="Reference to the active session")
     
     class Meta:
         db_table = 'faceapp_ma_repeaters'
@@ -538,7 +553,8 @@ class MA_Repeaters(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.person.name} - MA repeat #{self.repeat_count} after {self.days_gap} days"
+        status = "✅ Completed" if self.is_completed else f"Day {self.day_number}/5"
+        return f"{self.person.name} - MA repeat #{self.repeat_count} ({status}) after {self.days_gap} days"
     
     def get_gap_display(self):
         """Get user-friendly gap display"""
@@ -554,14 +570,20 @@ class MA_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
+
 class SSP1_Repeaters(models.Model):
-    """Track SSP1 repeat attendance with dynamic days gap"""
+    """Track SSP1 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='ssp1_repeaters')
     previous_attendance_date = models.DateField(help_text="When they last completed SSP1")
     repeat_attendance_date = models.DateField(auto_now_add=True)
     days_gap = models.IntegerField()
     repeat_count = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # ✅ NEW COLUMNS ADDED - Same as regular session tables
+    day_number = models.IntegerField(default=1, help_text="Day 1 or 2 of SSP1 repeat")
+    is_completed = models.BooleanField(default=False, help_text="True when repeat session completed")
+    session_reference = models.ForeignKey('TejgyanSession', on_delete=models.CASCADE, null=True, blank=True, help_text="Reference to the active session")
     
     class Meta:
         db_table = 'faceapp_ssp1_repeaters'
@@ -570,7 +592,8 @@ class SSP1_Repeaters(models.Model):
         ordering = ['-repeat_attendance_date']
     
     def __str__(self):
-        return f"{self.person.name} - SSP1 repeat #{self.repeat_count} after {self.days_gap} days"
+        status = "✅ Completed" if self.is_completed else f"Day {self.day_number}/2"
+        return f"{self.person.name} - SSP1 repeat #{self.repeat_count} ({status}) after {self.days_gap} days"
     
     def get_gap_display(self):
         if self.days_gap == 1:
@@ -585,14 +608,20 @@ class SSP1_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
+
 class SSP2_Repeaters(models.Model):
-    """Track SSP2 repeat attendance with dynamic days gap"""
+    """Track SSP2 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='ssp2_repeaters')
     previous_attendance_date = models.DateField(help_text="When they last completed SSP2")
     repeat_attendance_date = models.DateField(auto_now_add=True)
     days_gap = models.IntegerField()
     repeat_count = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # ✅ NEW COLUMNS ADDED - Same as regular session tables
+    day_number = models.IntegerField(default=1, help_text="Day 1 or 2 of SSP2 repeat")
+    is_completed = models.BooleanField(default=False, help_text="True when repeat session completed")
+    session_reference = models.ForeignKey('TejgyanSession', on_delete=models.CASCADE, null=True, blank=True, help_text="Reference to the active session")
     
     class Meta:
         db_table = 'faceapp_ssp2_repeaters'
@@ -601,7 +630,8 @@ class SSP2_Repeaters(models.Model):
         ordering = ['-repeat_attendance_date']
     
     def __str__(self):
-        return f"{self.person.name} - SSP2 repeat #{self.repeat_count} after {self.days_gap} days"
+        status = "✅ Completed" if self.is_completed else f"Day {self.day_number}/2"
+        return f"{self.person.name} - SSP2 repeat #{self.repeat_count} ({status}) after {self.days_gap} days"
     
     def get_gap_display(self):
         if self.days_gap == 1:
@@ -616,14 +646,20 @@ class SSP2_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
+
 class HS1_Repeaters(models.Model):
-    """Track Higher Shivir 1 repeat attendance with dynamic days gap"""
+    """Track Higher Shivir 1 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='hs1_repeaters')
     previous_attendance_date = models.DateField(help_text="When they last completed HS1")
     repeat_attendance_date = models.DateField(auto_now_add=True)
     days_gap = models.IntegerField()
     repeat_count = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # ✅ NEW COLUMNS ADDED - Same as regular session tables
+    day_number = models.IntegerField(default=1, help_text="Day 1 or 2 of HS1 repeat")
+    is_completed = models.BooleanField(default=False, help_text="True when repeat session completed")
+    session_reference = models.ForeignKey('TejgyanSession', on_delete=models.CASCADE, null=True, blank=True, help_text="Reference to the active session")
     
     class Meta:
         db_table = 'faceapp_hs1_repeaters'
@@ -632,7 +668,8 @@ class HS1_Repeaters(models.Model):
         ordering = ['-repeat_attendance_date']
     
     def __str__(self):
-        return f"{self.person.name} - HS1 repeat #{self.repeat_count} after {self.days_gap} days"
+        status = "✅ Completed" if self.is_completed else f"Day {self.day_number}/2"
+        return f"{self.person.name} - HS1 repeat #{self.repeat_count} ({status}) after {self.days_gap} days"
     
     def get_gap_display(self):
         if self.days_gap == 1:
@@ -647,14 +684,20 @@ class HS1_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
+
 class HS2_Repeaters(models.Model):
-    """Track Higher Shivir 2 repeat attendance with dynamic days gap"""
+    """Track Higher Shivir 2 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='hs2_repeaters')
     previous_attendance_date = models.DateField(help_text="When they last completed HS2")
     repeat_attendance_date = models.DateField(auto_now_add=True)
     days_gap = models.IntegerField()
     repeat_count = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # ✅ NEW COLUMNS ADDED - Same as regular session tables
+    day_number = models.IntegerField(default=1, help_text="Day 1 or 2 of HS2 repeat")
+    is_completed = models.BooleanField(default=False, help_text="True when repeat session completed")
+    session_reference = models.ForeignKey('TejgyanSession', on_delete=models.CASCADE, null=True, blank=True, help_text="Reference to the active session")
     
     class Meta:
         db_table = 'faceapp_hs2_repeaters'
@@ -663,7 +706,8 @@ class HS2_Repeaters(models.Model):
         ordering = ['-repeat_attendance_date']
     
     def __str__(self):
-        return f"{self.person.name} - HS2 repeat #{self.repeat_count} after {self.days_gap} days"
+        status = "✅ Completed" if self.is_completed else f"Day {self.day_number}/2"
+        return f"{self.person.name} - HS2 repeat #{self.repeat_count} ({status}) after {self.days_gap} days"
     
     def get_gap_display(self):
         if self.days_gap == 1:
@@ -676,6 +720,7 @@ class HS2_Repeaters(models.Model):
         else:
             months = self.days_gap // 30
             return f"{months} month{'s' if months > 1 else ''}"
+
 
 
 # TejgyanSession Model for Sirshree's Session Management (Enhanced)
@@ -781,6 +826,7 @@ class TejgyanSession(models.Model):
         return durations.get(self.session_type, 1)
 
 
+
 # Updated Attendance Model with NULL Session Support (Enhanced)
 class Attendance(models.Model):
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE)
@@ -801,6 +847,7 @@ class Attendance(models.Model):
         default=True, 
         help_text="True if marked by face recognition, False if manually added"
     )
+
 
     def __str__(self):
         # Handle both NULL and active sessions gracefully
