@@ -220,10 +220,10 @@ class KnownPerson(models.Model):
         current_shivir = self.get_shivir_background_level()
         
         # Enhanced debug logging
-        print(f"🔄 [AUTO-UPDATE] Processing shivir field update for {self.name}:")
-        print(f"  📊 Current shivir background: {current_shivir}")
-        print(f"  🎯 Completed session: {completed_session_type}")
-        print(f"  📝 Current shivir field value: '{self.shivir}'")
+        print(f" [AUTO-UPDATE] Processing shivir field update for {self.name}:")
+        print(f" Current shivir background: {current_shivir}")
+        print(f" Completed session: {completed_session_type}")
+        print(f" Current shivir field value: '{self.shivir}'")
         
         try:
             # ✅ Enhanced validation: Check if session is in progression order
@@ -256,23 +256,23 @@ class KnownPerson(models.Model):
                 self.save(update_fields=['shivir'])
                 
                 # 🎉 Success logging with spiritual progression context
-                print(f"  ✅ [SUCCESS] Spiritual progression updated!")
-                print(f"    📈 Shivir field: '{old_shivir}' → '{completed_session_type}'")
-                print(f"    🎯 New eligibility: {', '.join(self.get_eligible_sessions_based_on_shivir())}")
+                print(f" [SUCCESS] Spiritual progression updated!")
+                print(f" Shivir field: '{old_shivir}' → '{completed_session_type}'")
+                print(f" New eligibility: {', '.join(self.get_eligible_sessions_based_on_shivir())}")
                 
                 # 📊 Log progression achievement
                 if current_index == -1:
-                    print(f"    🌟 Achievement: First spiritual level attained!")
+                    print(f" Achievement: First spiritual level attained!")
                 elif completed_index > current_index:
                     levels_advanced = completed_index - current_index
-                    print(f"    🚀 Achievement: Advanced {levels_advanced} spiritual level(s)!")
+                    print(f" Achievement: Advanced {levels_advanced} spiritual level(s)!")
                 else:
-                    print(f"    🔄 Confirmation: Spiritual level maintained at {completed_session_type}")
+                    print(f" Confirmation: Spiritual level maintained at {completed_session_type}")
                 
                 return True
             else:
-                print(f"  ⚠️  [SKIP] Completed session {completed_session_type} is lower than current level {current_shivir}")
-                print(f"    💡 Note: Users can attend lower-level sessions for revision without affecting progression")
+                print(f" [SKIP] Completed session {completed_session_type} is lower than current level {current_shivir}")
+                print(f" Note: Users can attend lower-level sessions for revision without affecting progression")
                 return False
                 
         except ValueError as e:

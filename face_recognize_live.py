@@ -1,6 +1,11 @@
-# face_recognize_live.py - ENHANCED WITH SMART VOICE MESSAGES FOR COMPLETED SESSIONS + FIXED REPEATER DUPLICATES
+# face_recognize_live.py - ENHANCED WITH SESSION NAME & DAY IN VOICE ANNOUNCEMENTS + FIXED REPEAT LOGIC
 import os
 import sys
+
+# ✅ FIX FOR QT WAYLAND PLATFORM PLUGIN ERROR - MUST BE FIRST!
+os.environ['QT_QPA_PLATFORM'] = 'xcb'
+os.environ['DISPLAY'] = ':0'
+
 from contextlib import contextmanager
 
 @contextmanager
@@ -59,14 +64,14 @@ from faceapp.models import (
 )
 
 # ================================
-# 🎤 SIMPLE SINGLE FEMALE VOICE CONFIGURATION
+# 🎤 FEMALE VOICE ONLY CONFIGURATION
 # ================================
 
 # ✅ ElevenLabs API Configuration
-ELEVENLABS_API_KEY = "sk_28cca7b5ed320c52750c33b0d8568ca1d29c4a748c8dcba4"  # Your API key
+ELEVENLABS_API_KEY = "sk_2322421e65429ff82125808f7b4625604c215b512adb2ce1"  # Your API key
 USE_ELEVENLABS = True
 
-# SINGLE VOICE SELECTION - CHANGE ONLY THIS LINE TO SWITCH VOICES
+# SINGLE FEMALE VOICE SELECTION
 SELECTED_VOICE_ID = "H6QPv2pQZDcGqLwDTIJQ"  #Kanishka - Clear, professional (DEFAULT)
 
 print(f"[INFO] Selected Female Voice: {SELECTED_VOICE_ID}")
@@ -75,9 +80,16 @@ print(f"[INFO] Selected Female Voice: {SELECTED_VOICE_ID}")
 # END OF VOICE CONFIGURATION
 # ================================
 
-# Enhanced voice configuration
-ATTENDANCE_RENEWAL_HOURS = 0.0
-MESSAGE_DISPLAY_SECONDS = 10
+# ✅ 12-HOUR ATTENDANCE COOLDOWN + FIXED SMART VOICE REPETITION SYSTEM
+ATTENDANCE_RENEWAL_HOURS = 0.2  # Fixed to 12 hours
+MESSAGE_DISPLAY_SECONDS = 30     # Visual message display duration
+VOICE_REPEAT_SECONDS = 3         # Voice repeats every 3 seconds
+MAX_VOICE_REPEATS = 3            # Maximum voice repeats for success/already marked
+
+# ✅ VOICE REPETITION MODES
+VOICE_MODE_SUCCESS = "success"           # 3 times then stop
+VOICE_MODE_ALREADY_MARKED = "already"    # 3 times then stop
+VOICE_MODE_WAIT_NEXT_DAY = "wait"        # Infinite until user leaves
 
 # Initialize pygame with suppressed output
 with suppress_all_output():
@@ -92,13 +104,13 @@ voice_queue = Queue()
 tts_engine = None
 voice_initialized = False
 
-# ✅ UPDATED ELEVENLABS VOICE INTEGRATION - SINGLE FEMALE VOICE ONLY
-def create_elevenlabs_audio(text, gender='F'):
-    """Create audio using ElevenLabs API - SINGLE FEMALE VOICE"""
+# ✅ FEMALE VOICE ONLY - NO GENDER PARAMETERS
+def create_elevenlabs_audio(text):
+    """Create audio using ElevenLabs API - FEMALE VOICE ONLY"""
     if not ELEVENLABS_API_KEY or ELEVENLABS_API_KEY == "sk-your-elevenlabs-api-key-here":
         return None
     
-    # Always use your selected female voice
+    # Always use female voice
     voice_id = SELECTED_VOICE_ID
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
     
@@ -152,14 +164,14 @@ def play_audio_file(audio_file):
             return False
 
 def initialize_pyttsx3_engine():
-    """Initialize pyttsx3 engine as fallback"""
+    """Initialize pyttsx3 engine as fallback - FEMALE VOICE ONLY"""
     global tts_engine, voice_initialized
     with suppress_all_output():
         try:
             tts_engine = pyttsx3.init()
             voices = tts_engine.getProperty('voices')
             if voices and len(voices) > 0:
-                # Try to find female voice first
+                # Find female voice only
                 female_voice = None
                 for voice in voices:
                     if 'female' in voice.name.lower() or 'zira' in voice.name.lower():
@@ -169,7 +181,7 @@ def initialize_pyttsx3_engine():
                 if female_voice:
                     tts_engine.setProperty('voice', female_voice.id)
                 else:
-                    # Use first available voice
+                    # Use first available voice if no female found
                     tts_engine.setProperty('voice', voices[0].id)
                 
                 tts_engine.setProperty('rate', 140)
@@ -180,8 +192,8 @@ def initialize_pyttsx3_engine():
         except Exception as e:
             voice_initialized = False
 
-def speak_with_pyttsx3(text, gender='F'):
-    """Fallback speech using pyttsx3 - Always female voice"""
+def speak_with_pyttsx3(text):
+    """Fallback speech using pyttsx3 - FEMALE VOICE ONLY"""
     global tts_engine, voice_initialized
     if not voice_initialized:
         initialize_pyttsx3_engine()
@@ -196,21 +208,21 @@ def speak_with_pyttsx3(text, gender='F'):
                 return False
     return False
 
-# ✅ ENHANCED VOICE WORKER - ALWAYS FEMALE VOICE
+# ✅ FEMALE VOICE WORKER ONLY
 def voice_worker():
-    """Enhanced voice worker with female-only ElevenLabs integration"""
+    """Female voice worker only"""
     while True:
         try:
             voice_data = voice_queue.get(timeout=2)
             if voice_data == "STOP":
                 break
             
-            message, gender = voice_data  # gender is ignored, always female
+            message = voice_data  # No gender parameter needed
             success = False
             
-            # Try ElevenLabs with selected female voice first
+            # Try ElevenLabs female voice first
             if USE_ELEVENLABS:
-                audio_file = create_elevenlabs_audio(message, 'F')  # Always female
+                audio_file = create_elevenlabs_audio(message)
                 if audio_file:
                     if play_audio_file(audio_file):
                         success = True
@@ -221,23 +233,22 @@ def voice_worker():
                         except:
                             pass
             
-            # Fallback to pyttsx3 with female voice if ElevenLabs fails
+            # Fallback to pyttsx3 female voice
             if not success:
-                success = speak_with_pyttsx3(message, 'F')  # Always female
+                success = speak_with_pyttsx3(message)
             
             voice_queue.task_done()
             time.sleep(0.2)
         except:
             continue
 
-def speak_ultra_human(message, gender='F'):
-    """Queue voice message for speaking - FEMALE ONLY VERSION"""
+def speak_ultra_human(message):
+    """Queue voice message for speaking - FEMALE VOICE ONLY"""
     with suppress_all_output():
         try:
             if len(message) > 500:
                 message = message[:500] + "..."
-            # Always use female voice regardless of gender parameter
-            voice_queue.put((message, 'F'), timeout=2)
+            voice_queue.put(message, timeout=2)
         except:
             pass
 
@@ -366,12 +377,13 @@ def get_active_session():
 
 # ✅ SYSTEM INITIALIZATION
 print("[INFO] Initializing Tejgyan Foundation Face Recognition System...")
-print(f"[INFO] Voice System: {'ElevenLabs AI (Female Voice)' if USE_ELEVENLABS else 'pyttsx3 Fallback (Female Voice)'}")
+print(f"[INFO] Qt Platform Plugin Fixed: Using {os.environ['QT_QPA_PLATFORM']}")
+print(f"[INFO] Voice System: {'ElevenLabs AI (Female Voice Only)' if USE_ELEVENLABS else 'pyttsx3 Fallback (Female Voice Only)'}")
 
 # Initialize voice engine
 initialize_pyttsx3_engine()
 
-# Start enhanced voice worker thread
+# Start female voice worker thread
 try:
     voice_thread = threading.Thread(target=voice_worker, daemon=True)
     voice_thread.start()
@@ -384,7 +396,7 @@ except Exception as e:
 
 # Get active session
 print("\nTejgyan Foundation Attendance System")
-print("Enhanced ElevenLabs Female Voice Experience")
+print("Enhanced Voice with Session Name & Day Information + Fixed Repeater Logic")
 print("Conducted by: Sirshree")
 print("="*60)
 
@@ -397,6 +409,8 @@ if ACTIVE_SESSION:
     print(f"Session Date: {ACTIVE_SESSION.session_date}")
     print(f"Conducted by: {ACTIVE_SESSION.conducted_by}")
     print(f"Attendance Renewal: {ATTENDANCE_RENEWAL_HOURS} hours")
+    print(f"Voice Repeat Interval: {VOICE_REPEAT_SECONDS} seconds")
+    print(f"Max Voice Repeats: {MAX_VOICE_REPEATS} times")
     print("="*60)
 else:
     print("Cannot start face recognition without an active session!")
@@ -450,8 +464,8 @@ if not known_face_encodings:
     print("[ERROR] No face encodings loaded. Check user images.")
     sys.exit(1)
 
-# ✅ ENHANCED Hindi voice messages with SMART COMPLETION LOGIC
-def get_session_continuation_message(name, gender, session_type, day_number):
+# ✅ ENHANCED VOICE MESSAGES WITH SESSION NAME & DAY INFORMATION
+def get_session_continuation_message(name, session_type, day_number):
     session_names = {
         'MA': 'एम ए शिविर', 'SSP1': 'एस एस पी वन शिविर', 'SSP2': 'एस एस पी टू शिविर',
         'HS1': 'हायर शिविर वन', 'HS2': 'हायर शिविर टू', 'FESTIVAL': 'त्योहार सत्संग'
@@ -459,36 +473,61 @@ def get_session_continuation_message(name, gender, session_type, day_number):
     session_hindi = session_names.get(session_type, 'शिविर')
     return f"हैप्पी थॉट्स {name}, {session_hindi} के दिन {day_number} में आपकी उपस्थिति दर्ज की गई है, धन्यवाद।"
 
-def get_session_completion_message(name, gender, session_type):
+# ✅ ENHANCED: Session name and day-specific attendance messages
+def get_day_attendance_marked_message(name, session_type, day_number, session_duration):
+    """Enhanced message with session name and day information"""
     session_names = {
         'MA': 'एम ए शिविर', 'SSP1': 'एस एस पी वन शिविर', 'SSP2': 'एस एस पी टू शिविर',
         'HS1': 'हायर शिविर वन', 'HS2': 'हायर शिविर टू', 'FESTIVAL': 'त्योहार सत्संग'
     }
     session_hindi = session_names.get(session_type, 'शिविर')
+    
+    # ✅ ENHANCED: Include session name and day information
+    if day_number == session_duration:
+        return f"हैप्पी थॉट्स {name}, {session_hindi} के अंतिम दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। आपके भावी सत्र के लिए शुभकामनाएं, धन्यवाद।"
+    else:
+        return f"हैप्पी थॉट्स {name}, {session_hindi} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है, धन्यवाद।"
+
+# ✅ REMOVED: Session completion congratulatory message (no longer used for voice)
+def get_session_completion_message(name, session_type):
+    session_names = {
+        'MA': 'एम ए शिविर', 'SSP1': 'एस एस पी वन शिविर', 'SSP2': 'एस एस पी टू शिविर',
+        'HS1': 'हायर शिविर वन', 'HS2': 'हायर शिविर टू', 'FESTIVAL': 'त्योहार सत्संग'
+    }
+    session_hindi = session_names.get(session_type, 'शिविर')
+    # ✅ REMOVED: This function exists but will not be used for voice anymore
     return f"हैप्पी थॉट्स, बधाई हो {name}! आपने {session_hindi} सफलतापूर्वक पूरा कर लिया है। आपकी आध्यात्मिक यात्रा में यह एक महत्वपूर्ण उपलब्धि है, धन्यवाद।"
 
-def get_session_already_completed_message(name, gender, session_type):
-    """Smart message for users who have already completed their entire session"""
+def get_second_day_special_message(name, session_type):
+    """Special message for 2nd day attendance with well wishes for spiritual journey"""
     session_names = {
         'MA': 'एम ए शिविर', 'SSP1': 'एस एस पी वन शिविर', 'SSP2': 'एस एस पी टू शिविर',
         'HS1': 'हायर शिविर वन', 'HS2': 'हायर शिविर टू', 'FESTIVAL': 'त्योहार सत्संग'
     }
     session_hindi = session_names.get(session_type, 'शिविर')
-    return f"हैप्पी थॉट्स {name}, आपका आज का {session_hindi} पूरा हो गया है। कृपया अगले शिविर के लिए भविष्य में आएं, धन्यवाद।"
+    return f"हैप्पी थॉट्स {name}, {session_hindi} में आपकी उपस्थिति सफलतापूर्वक दर्ज हो गई है, आपकी अगली आध्यात्मिक यात्रा के लिए शुभकामनाएं, धन्यवाद।"
 
-def get_blacklist_message(name, gender):
+def get_session_already_completed_message(name, session_type):
+    session_names = {
+        'MA': 'एम ए शिविर', 'SSP1': 'एस एस पी वन शिविर', 'SSP2': 'एस एस पी टू शिविर',
+        'HS1': 'हायर शिविर वन', 'HS2': 'हायर शिविर टू', 'FESTIVAL': 'त्योहार सत्संग'
+    }
+    session_hindi = session_names.get(session_type, 'शिविर')
+    return f"हैप्पी थॉट्स {name}, {session_hindi} में आपकी उपस्थिति सफलतापूर्वक दर्ज हो गई है। कृपया अगले शिविर के लिए भविष्य में आएं, धन्यवाद।"
+
+def get_blacklist_message(name):
     return f"हैप्पी थॉट्स {name}, आप वर्तमान में प्रतिबंधित सूची में हैं। कृपया एडमिन से संपर्क करें, धन्यवाद।"
 
-def get_inactive_message(name, gender):
+def get_inactive_message(name):
     return f"हैप्पी थॉट्स {name}, आप वर्तमान में निष्क्रिय हैं। कृपया एडमिन से संपर्क करके सक्रियता प्राप्त करें, धन्यवाद।"
 
-def get_inactive_and_blacklisted_message(name, gender):
+def get_inactive_and_blacklisted_message(name):
     return f"हैप्पी थॉट्स {name}, आप वर्तमान में निष्क्रिय और प्रतिबंधित सूची दोनों में हैं। कृपया तुरंत एडमिन से संपर्क करें, धन्यवाद।"
 
-def get_new_user_guidance_message(name, gender):
+def get_new_user_guidance_message(name):
     return f"हैप्पी थॉट्स {name}, तेजज्ञान फाउंडेशन में आपका हार्दिक स्वागत है। कृपया पहले एम ए शिविर से अपनी आध्यात्मिक यात्रा शुरू करें, धन्यवाद।"
 
-def get_not_eligible_message(name, gender, current_session, user_level):
+def get_not_eligible_message(name, current_session, user_level):
     session_names = {
         'MA': 'एम ए शिविर', 'SSP1': 'एस एस पी वन शिविर', 'SSP2': 'एस एस पी टू शिविर',
         'HS1': 'हायर शिविर वन', 'HS2': 'हायर शिविर टू', 'FESTIVAL': 'त्योहार सत्संग'
@@ -496,13 +535,33 @@ def get_not_eligible_message(name, gender, current_session, user_level):
     current_hindi = session_names.get(current_session, 'शिविर')
     return f"हैप्पी थॉट्स {name}, आप {current_hindi} के लिए योग्य नहीं हैं, कृपया पहले पिछला स्तर पूरा करें, धन्यवाद।"
 
-def get_attendance_marked_message(name, gender):
-    return f"हैप्पी थॉट्स {name}, आपकी उपस्थिति सफलतापूर्वक दर्ज हो गई है, आपकी आध्यात्मिक यात्रा में यह एक सुंदर कदम है, धन्यवाद।"
+# ✅ ENHANCED: Include session name in attendance marked message
+def get_attendance_marked_message(name, session_type=None):
+    if session_type is None:
+        session_type = ACTIVE_SESSION.session_type
 
-def get_already_marked_message(name, gender):
+    session_names = {
+        'MA': 'एम ए शिविर',
+        'SSP1': 'एस एस पी वन शिविर',
+        'SSP2': 'एस एस पी टू शिविर',
+        'HS1': 'हायर शिविर वन',
+        'HS2': 'हायर शिविर टू',
+        'FESTIVAL': 'त्योहार सत्संग'
+    }
+    session_hindi = session_names.get(session_type, 'शिविर')
+    return (
+        f"हैप्पी थॉट्स {name}, "
+        f"{session_hindi} में आपकी उपस्थिति सफलतापूर्वक दर्ज हो गई है, धन्यवाद।"
+    )
+
+def get_already_marked_message(name):
     return f"हैप्पी थॉट्स {name}, आपकी उपस्थिति पहले ही दर्ज हो चुकी है। आपका समय और ध्यान देने के लिए धन्यवाद।"
 
-def get_12_hour_wait_message(name, gender, hours_remaining):
+# ✅ NEW: NEXT DAY ATTENDANCE MESSAGE FOR 12-HOUR COOLDOWN (INFINITE REPETITION)
+def get_mark_next_day_message(name, hours_remaining):
+    return f"हैप्पी थॉट्स {name}, आपकी उपस्थिति दर्ज हो चुकी है। कृपया अगले दिन उपस्थिति दर्ज करें, धन्यवाद।"
+
+def get_12_hour_wait_message(name, hours_remaining):
     if hours_remaining < 1:
         minutes = int(hours_remaining * 60)
         if minutes <= 1:
@@ -515,13 +574,67 @@ def get_12_hour_wait_message(name, gender, hours_remaining):
         hours = int(hours_remaining)
         return f"हैप्पी थॉट्स {name}, कृपया {hours} घंटे बाद उपस्थिति दर्ज करें। आप अपने समय का सदुपयोग करें, धन्यवाद।"
 
-def get_repeater_welcome_message(name, gender, days_gap):
+def get_repeater_welcome_message(name, days_gap):
     return f"हैप्पी थॉट्स {name}, {days_gap} दिन बाद आपका पुनरागमन अत्यंत स्वागत है। आपकी निरंतर साधना प्रेरणादायक है, आपकी उपस्थिति दर्ज की गई है, धन्यवाद।"
 
-def get_repeater_already_marked_message(name, gender):
+def get_repeater_already_marked_message(name):
     return f"हैप्पी थॉट्स {name}, आपकी उपस्थिति पहले से ही दर्ज है, आपकी निरंतरता सराहनीय है, धन्यवाद।"
 
-# ✅ MINIMAL FIX 1: Safe repeater creation function - NO MORE DUPLICATES!
+# ✅ ENHANCED: SMART VOICE MESSAGE FUNCTION WITH SESSION NAME & DAY INFO
+def get_current_state_voice_message(email, name):
+    """Get live voice message based on current user state for repetition"""
+    try:
+        matched_person = KnownPerson.objects.get(email=email)
+        
+        # Check current state and return appropriate message
+        if not matched_person.is_active and matched_person.is_blacklisted:
+            return get_inactive_and_blacklisted_message(name), VOICE_MODE_WAIT_NEXT_DAY
+        elif not matched_person.is_active:
+            return get_inactive_message(name), VOICE_MODE_WAIT_NEXT_DAY
+        elif matched_person.is_blacklisted:
+            return get_blacklist_message(name), VOICE_MODE_WAIT_NEXT_DAY
+        
+        # Check attendance eligibility
+        today = date.today()
+        current_session_type = ACTIVE_SESSION.session_type
+        user_shivir_level = matched_person.get_shivir_background_level()
+        eligible_sessions = get_user_eligible_sessions(matched_person, user_shivir_level)
+        
+        if current_session_type not in eligible_sessions:
+            if not user_shivir_level:
+                return get_new_user_guidance_message(name), VOICE_MODE_WAIT_NEXT_DAY
+            else:
+                return get_not_eligible_message(name, current_session_type, user_shivir_level), VOICE_MODE_WAIT_NEXT_DAY
+        
+        # Check 12-hour renewal status
+        can_mark_general, renewal_info = check_12_hour_renewal(matched_person, ACTIVE_SESSION)
+        
+        if not can_mark_general:
+            hours_remaining = renewal_info
+            if hours_remaining > 11.9:  # Just marked moments ago (immediate retry)
+                # ✅ ENHANCED: Check current day for specific message including session name and day
+                if current_session_type != 'FESTIVAL':
+                    AttendanceModel = get_attendance_model(current_session_type)
+                    if AttendanceModel:
+                        existing_attendance = AttendanceModel.objects.filter(
+                            person=matched_person,
+                            session_reference=ACTIVE_SESSION
+                        ).first()
+                        if existing_attendance:
+                            session_duration = get_session_duration(current_session_type)
+                            return get_day_attendance_marked_message(name, current_session_type, existing_attendance.day_number, session_duration), VOICE_MODE_ALREADY_MARKED
+                
+                return get_already_marked_message(name), VOICE_MODE_ALREADY_MARKED
+            else:
+                # ✅ IN 12-HOUR COOLDOWN PERIOD - INFINITE VOICE REPETITION
+                return get_mark_next_day_message(name, hours_remaining), VOICE_MODE_WAIT_NEXT_DAY
+        else:
+            return get_attendance_marked_message(name), VOICE_MODE_SUCCESS
+            
+    except Exception as e:
+        return get_attendance_marked_message(name), VOICE_MODE_SUCCESS
+
+# ✅ SAFE REPEATER CREATION FUNCTION
 def create_repeater_record_safely(RepeaterModel, person, last_completion_date, days_gap):
     """Create repeater record ONLY if it doesn't exist for today"""
     today = date.today()
@@ -592,6 +705,7 @@ def check_session_12_hour_renewal(person, session_type, today):
         return True, 0
     return True, 0
 
+# ✅ CRITICAL FIX: Repeater attendance logic with 1-day minimum gap and active session check
 def check_if_repeat_attendance(person, session_type, today):
     if session_type == 'FESTIVAL':
         return False, None
@@ -600,6 +714,18 @@ def check_if_repeat_attendance(person, session_type, today):
     if not AttendanceModel:
         return False, None
     
+    # ✅ FIX 1: First check if there's an ACTIVE/ONGOING session
+    active_session_attendance = AttendanceModel.objects.filter(
+        person=person,
+        session_reference=ACTIVE_SESSION,
+        is_completed=False  # Key: Not completed yet
+    ).first()
+    
+    if active_session_attendance:
+        # Person has an ongoing session - NOT a repeater
+        return False, None
+    
+    # ✅ FIX 2: Check for completed sessions with 1-day minimum gap requirement
     completed_attendance = AttendanceModel.objects.filter(person=person, is_completed=True).order_by('-attendance_date').first()
     
     if completed_attendance:
@@ -611,7 +737,13 @@ def check_if_repeat_attendance(person, session_type, today):
                 last_completion_date = last_repeat.repeat_attendance_date
         
         days_gap = (today - last_completion_date).days
-        return True, {'last_completion_date': last_completion_date, 'days_gap': days_gap}
+        
+        # ✅ KEY FIX: Only allow repeat attendance if at least 1 day has passed
+        if days_gap >= 1:
+            return True, {'last_completion_date': last_completion_date, 'days_gap': days_gap}
+        else:
+            # Same day completion - not eligible for repeat yet
+            return False, None
     
     return False, None
 
@@ -637,6 +769,7 @@ def get_user_eligible_sessions(person, user_shivir_level):
     
     return eligible_sessions
 
+# ✅ ENHANCED ATTENDANCE FUNCTION WITH SESSION NAME & DAY IN VOICE MESSAGES
 def mark_attendance_with_ultra_voice(email, name, gender):
     try:
         matched_person = KnownPerson.objects.get(email=email)
@@ -645,20 +778,20 @@ def mark_attendance_with_ultra_voice(email, name, gender):
 
     if not matched_person.is_active and matched_person.is_blacklisted:
         status = "User is Inactive & Blacklisted!"
-        voice_message = get_inactive_and_blacklisted_message(name, 'F')
-        speak_ultra_human(voice_message, 'F')
+        voice_message = get_inactive_and_blacklisted_message(name)
+        speak_ultra_human(voice_message)
         return status
 
     elif not matched_person.is_active:
         status = "User is Inactive!"
-        voice_message = get_inactive_message(name, 'F')
-        speak_ultra_human(voice_message, 'F')
+        voice_message = get_inactive_message(name)
+        speak_ultra_human(voice_message)
         return status
 
     elif matched_person.is_blacklisted:
         status = "User is Blacklisted!"
-        voice_message = get_blacklist_message(name, 'F')
-        speak_ultra_human(voice_message, 'F')
+        voice_message = get_blacklist_message(name)
+        speak_ultra_human(voice_message)
         return status
 
     else:
@@ -671,29 +804,38 @@ def mark_attendance_with_ultra_voice(email, name, gender):
         if current_session_type not in eligible_sessions:
             if not user_shivir_level:
                 status = "New User - Must Start with MA!"
-                voice_message = get_new_user_guidance_message(name, 'F')
-                speak_ultra_human(voice_message, 'F')
+                voice_message = get_new_user_guidance_message(name)
+                speak_ultra_human(voice_message)
                 return status
             else:
                 status = f"Not Eligible for {current_session_type}!"
-                voice_message = get_not_eligible_message(name, 'F', current_session_type, user_shivir_level)
-                speak_ultra_human(voice_message, 'F')
+                voice_message = get_not_eligible_message(name, current_session_type, user_shivir_level)
+                speak_ultra_human(voice_message)
                 return status
         
+        # ✅ 12-HOUR COOLDOWN LOGIC
         can_mark_general, renewal_info = check_12_hour_renewal(matched_person, ACTIVE_SESSION)
         
         if not can_mark_general:
             hours_remaining = renewal_info
-            if hours_remaining > 1:
-                status = f"Please wait {hours_remaining:.1f} hours before next attendance"
+            # Distinguish immediate retry vs cooldown period
+            if hours_remaining > 11.9:  # Just marked moments ago
+                voice_message = get_already_marked_message(name)
+                speak_ultra_human(voice_message)
+                return f"Already marked attendance!"
             else:
-                minutes_remaining = int(hours_remaining * 60)
-                status = f"Please wait {minutes_remaining} minutes before next attendance"
-            
-            voice_message = get_12_hour_wait_message(name, 'F', hours_remaining)
-            speak_ultra_human(voice_message, 'F')
-            return status
+                # In 12-hour cooldown period
+                if hours_remaining > 1:
+                    status = f"Please wait {hours_remaining:.1f} hours before next attendance"
+                else:
+                    minutes_remaining = int(hours_remaining * 60)
+                    status = f"Please wait {minutes_remaining} minutes before next attendance"
+                
+                voice_message = get_mark_next_day_message(name, hours_remaining)
+                speak_ultra_human(voice_message)
+                return status
         
+        # ✅ FIXED: Check repeat attendance with 1-day minimum gap
         is_repeat, repeat_info = check_if_repeat_attendance(matched_person, current_session_type, today)
         
         if is_repeat:
@@ -705,11 +847,11 @@ def mark_attendance_with_ultra_voice(email, name, gender):
             if not can_mark_repeat:
                 hours_remaining = repeat_renewal_info
                 status = f"Repeat attendance - please wait {hours_remaining:.1f} hours"
-                voice_message = get_12_hour_wait_message(name, 'F', hours_remaining)
-                speak_ultra_human(voice_message, 'F')
+                voice_message = get_mark_next_day_message(name, hours_remaining)
+                speak_ultra_human(voice_message)
                 return status
             
-            # ✅ MINIMAL FIX 2: Use safe repeater creation function
+            # Use safe repeater creation function
             RepeaterModel = get_repeater_model(current_session_type)
             if RepeaterModel:
                 repeater, repeater_created = create_repeater_record_safely(
@@ -718,38 +860,38 @@ def mark_attendance_with_ultra_voice(email, name, gender):
                 
                 if not repeater_created:
                     # Repeater record already exists for today
-                    voice_message = get_repeater_already_marked_message(name, 'F')
-                    speak_ultra_human(voice_message, 'F')
+                    voice_message = get_repeater_already_marked_message(name)
+                    speak_ultra_human(voice_message)
                     return f"Repeat attendance already marked for today!"
             
             # Create general attendance record
             try:
                 Attendance.objects.create(person=matched_person, session=ACTIVE_SESSION)
                 
-                voice_message_1 = get_repeater_welcome_message(name, 'F', days_gap)
-                speak_ultra_human(voice_message_1, 'F')
+                voice_message_1 = get_repeater_welcome_message(name, days_gap)
+                speak_ultra_human(voice_message_1)
                 time.sleep(3)
-                voice_message_2 = get_repeater_already_marked_message(name, 'F')
-                speak_ultra_human(voice_message_2, 'F')
+                voice_message_2 = get_repeater_already_marked_message(name)
+                speak_ultra_human(voice_message_2)
                 
                 status = f"Repeat Attendance - Welcome Back After {days_gap} Days!"
                 return status
                 
             except IntegrityError:
-                voice_message = get_already_marked_message(name, 'F')
-                speak_ultra_human(voice_message, 'F')
+                voice_message = get_already_marked_message(name)
+                speak_ultra_human(voice_message)
                 status = f"Already marked for {ACTIVE_SESSION.get_session_type_display()}!"
                 return status
         
         if current_session_type == 'FESTIVAL':
             try:
                 Attendance.objects.create(person=matched_person, session=ACTIVE_SESSION)
-                voice_message = get_attendance_marked_message(name, 'F')
-                speak_ultra_human(voice_message, 'F')
+                voice_message = get_attendance_marked_message(name, current_session_type)
+                speak_ultra_human(voice_message)
                 return f"Festival Attendance Marked!"
             except IntegrityError:
-                voice_message = get_already_marked_message(name, 'F')
-                speak_ultra_human(voice_message, 'F')
+                voice_message = get_already_marked_message(name)
+                speak_ultra_human(voice_message)
                 return f"Already marked for {ACTIVE_SESSION.get_session_type_display()}!"
         
         else:
@@ -766,8 +908,8 @@ def mark_attendance_with_ultra_voice(email, name, gender):
                         minutes_remaining = int(hours_remaining * 60)
                         status = f"Session attendance - please wait {minutes_remaining} minutes"
                     
-                    voice_message = get_12_hour_wait_message(name, 'F', hours_remaining)
-                    speak_ultra_human(voice_message, 'F')
+                    voice_message = get_mark_next_day_message(name, hours_remaining)
+                    speak_ultra_human(voice_message)
                     return status
                 
                 existing_attendance = AttendanceModel.objects.filter(
@@ -779,9 +921,9 @@ def mark_attendance_with_ultra_voice(email, name, gender):
                 
                 if existing_attendance:
                     if existing_attendance.is_completed:
-                        voice_message = get_session_already_completed_message(name, 'F', current_session_type)
-                        speak_ultra_human(voice_message, 'F')
-                        return f"✅ Session Already Completed - Come for Next Session"
+                        voice_message = get_session_already_completed_message(name, current_session_type)
+                        speak_ultra_human(voice_message)
+                        return f"Session Already Completed - Come for Next Session"
                         
                     elif existing_attendance.day_number < session_duration:
                         existing_attendance.day_number += 1
@@ -799,22 +941,21 @@ def mark_attendance_with_ultra_voice(email, name, gender):
                         
                         if existing_attendance.is_completed:
                             success = matched_person.update_shivir_field_on_completion(current_session_type)
-                            voice_message = get_session_completion_message(name, 'F', current_session_type)
-                            speak_ultra_human(voice_message, 'F')
-                            status = f"🎉 Session Completed - {ACTIVE_SESSION.get_session_type_display()}!"
+                            # ✅ ENHANCED: Use session name and day message for completion
+                            voice_message = get_day_attendance_marked_message(name, current_session_type, existing_attendance.day_number, session_duration)
+                            speak_ultra_human(voice_message)
+                            status = f"Session Completed - {ACTIVE_SESSION.get_session_type_display()}!"
                         else:
-                            voice_message_1 = get_session_continuation_message(name, 'F', current_session_type, existing_attendance.day_number)
-                            speak_ultra_human(voice_message_1, 'F')
-                            time.sleep(3)
-                            voice_message_2 = get_already_marked_message(name, 'F')
-                            speak_ultra_human(voice_message_2, 'F')
+                            # ✅ ENHANCED: Use session name and day-specific message
+                            voice_message = get_day_attendance_marked_message(name, current_session_type, existing_attendance.day_number, session_duration)
+                            speak_ultra_human(voice_message)
                             status = f"Day {existing_attendance.day_number}/{session_duration} - {ACTIVE_SESSION.get_session_type_display()}"
                         
                         return status
                     
                     else:
-                        voice_message = get_already_marked_message(name, 'F')
-                        speak_ultra_human(voice_message, 'F')
+                        voice_message = get_already_marked_message(name)
+                        speak_ultra_human(voice_message)
                         return f"Already marked for today!"
                 
                 else:
@@ -826,8 +967,8 @@ def mark_attendance_with_ultra_voice(email, name, gender):
                             is_completed=(session_duration == 1)
                         )
                     except IntegrityError:
-                        voice_message = get_already_marked_message(name, 'F')
-                        speak_ultra_human(voice_message, 'F')
+                        voice_message = get_already_marked_message(name)
+                        speak_ultra_human(voice_message)
                         return f"Already marked for {ACTIVE_SESSION.get_session_type_display()}!"
                     
                     try:
@@ -837,15 +978,14 @@ def mark_attendance_with_ultra_voice(email, name, gender):
                     
                     if session_duration == 1:
                         success = matched_person.update_shivir_field_on_completion(current_session_type)
-                        voice_message = get_session_completion_message(name, 'F', current_session_type)
-                        speak_ultra_human(voice_message, 'F')
-                        status = f"🎉 Session Completed - {ACTIVE_SESSION.get_session_type_display()}!"
+                        # ✅ ENHANCED: Use session name and day message for single-day sessions
+                        voice_message = get_day_attendance_marked_message(name, current_session_type, 1, session_duration)
+                        speak_ultra_human(voice_message)
+                        status = f"Session Completed - {ACTIVE_SESSION.get_session_type_display()}!"
                     else:
-                        voice_message_1 = get_session_continuation_message(name, 'F', current_session_type, 1)
-                        speak_ultra_human(voice_message_1, 'F')
-                        time.sleep(3)
-                        voice_message_2 = get_already_marked_message(name, 'F')
-                        speak_ultra_human(voice_message_2, 'F')
+                        # ✅ ENHANCED: Use session name and day-specific message for Day 1
+                        voice_message = get_day_attendance_marked_message(name, current_session_type, 1, session_duration)
+                        speak_ultra_human(voice_message)
                         status = f"Day 1/{session_duration} - {ACTIVE_SESSION.get_session_type_display()}"
                     
                     return status
@@ -913,11 +1053,11 @@ def get_gender_display(gender):
     else:
         return ''
 
-# Cache management
+# ✅ ENHANCED CACHE MANAGEMENT WITH FIXED SMART VOICE REPETITION
 message_cache = {}
 
 # Camera initialization
-print("[INFO] Initializing enhanced female voice camera system...")
+print("[INFO] Initializing enhanced voice camera system...")
 start_time = time.time()
 
 video_capture, camera_info = initialize_camera_with_fallbacks()
@@ -937,7 +1077,7 @@ if video_capture is None:
     sys.exit(1)
 
 initialization_time = time.time() - start_time
-print(f"[SUCCESS] Enhanced female voice camera system ready in {initialization_time:.2f} seconds")
+print(f"[SUCCESS] Enhanced voice camera system ready in {initialization_time:.2f} seconds")
 
 # Warm up camera
 print("[INFO] Warming up camera...")
@@ -948,10 +1088,11 @@ for i in range(3):
     time.sleep(0.2)
 
 print(f"[INFO] Tejgyan Face Recognition started for: {ACTIVE_SESSION.session_name}")
-print(f"[INFO] Enhanced female voice system ready")
+print(f"[INFO] Enhanced voice system with session name and day information ready")
+print(f"[INFO] Fixed repeater logic: Minimum 1-day gap required")
 print("[INFO] Press 'q' to quit.")
 
-# Main face recognition loop
+# ✅ MAIN FACE RECOGNITION LOOP WITH ENHANCED VOICE ANNOUNCEMENTS
 try:
     while True:
         ret, frame = video_capture.read()
@@ -989,13 +1130,48 @@ try:
                 name = matched_metadata['name']
                 gender = matched_metadata['gender']
 
+                # ✅ ENHANCED SMART VOICE REPETITION WITH SESSION & DAY INFO
                 if email not in message_cache or now > message_cache[email]['visible_until']:
-                    status_message = mark_attendance_with_ultra_voice(email, name, 'F')
+                    # First time or cache expired - full attendance process
+                    status_message = mark_attendance_with_ultra_voice(email, name, gender)
+                    fresh_voice_message, voice_mode = get_current_state_voice_message(email, name)
+                    
                     message_cache[email] = {
                         'message': status_message,
-                        'visible_until': now + MESSAGE_DISPLAY_SECONDS
+                        'visible_until': now + MESSAGE_DISPLAY_SECONDS,
+                        'last_voice_time': now,  # Track when voice was last played
+                        'voice_count': 1,        # Count voice repetitions (starts at 1)
+                        'voice_mode': voice_mode  # Track voice mode
                     }
+                    
+                elif now > message_cache[email].get('last_voice_time', 0) + VOICE_REPEAT_SECONDS:
+                    # ✅ ENHANCED SMART VOICE REPETITION WITH SESSION & DAY INFO
+                    status_message = message_cache[email]['message']
+                    voice_mode = message_cache[email].get('voice_mode', VOICE_MODE_SUCCESS)
+                    voice_count = message_cache[email].get('voice_count', 1)
+                    
+                    should_play_voice = False
+                    
+                    if voice_mode == VOICE_MODE_SUCCESS and voice_count < MAX_VOICE_REPEATS:
+                        # ✅ SUCCESS: Play 3 times then stop
+                        should_play_voice = True
+                    elif voice_mode == VOICE_MODE_ALREADY_MARKED and voice_count < MAX_VOICE_REPEATS:
+                        # ✅ ALREADY MARKED: Play 3 times then stop
+                        should_play_voice = True
+                    elif voice_mode == VOICE_MODE_WAIT_NEXT_DAY:
+                        # ✅ WAIT NEXT DAY: Play infinitely
+                        should_play_voice = True
+                    
+                    if should_play_voice:
+                        fresh_voice_message, _ = get_current_state_voice_message(email, name)
+                        speak_ultra_human(fresh_voice_message)
+                        
+                        # ✅ UPDATE VOICE COUNT AND TIME
+                        message_cache[email]['last_voice_time'] = now
+                        message_cache[email]['voice_count'] = voice_count + 1
+                    
                 else:
+                    # Within voice repeat interval - just display message
                     status_message = message_cache[email]['message']
 
             # Scale coordinates back
@@ -1061,13 +1237,10 @@ try:
                     bg_color = (0, 150, 0)
                     border_color = (0, 255, 0)
                     message_color = (255, 255, 0)
-                elif matched_metadata['gender'] == 'F':
+                else:
+                    # Default colors
                     bg_color = (100, 0, 100)
                     border_color = (255, 0, 255)
-                    message_color = (255, 255, 0) if "Day" in status_message else (0, 255, 255)
-                else:
-                    bg_color = (0, 100, 0)
-                    border_color = (0, 255, 0)
                     message_color = (255, 255, 0) if "Day" in status_message else (0, 255, 255)
                 
                 cv2.rectangle(frame, (left, y_text + 5), (left + message_width, y_text + 35), bg_color, -1)
@@ -1082,7 +1255,7 @@ try:
         for email in expired_emails:
             del message_cache[email]
 
-        cv2.imshow(f"Tejgyan Foundation - Smart Voice Recognition System", frame)
+        cv2.imshow(f"Tejgyan Foundation - Enhanced Voice with Session & Day Info", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("[INFO] Quitting...")
             break
