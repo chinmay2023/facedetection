@@ -81,7 +81,7 @@ print(f"[INFO] Selected Female Voice: {SELECTED_VOICE_ID}")
 # ================================
 
 # ✅ 12-HOUR ATTENDANCE COOLDOWN + FIXED SMART VOICE REPETITION SYSTEM
-ATTENDANCE_RENEWAL_HOURS = 0.2  # Fixed to 12 hours
+ATTENDANCE_RENEWAL_HOURS = 12.0  # Fixed to 12 hours
 MESSAGE_DISPLAY_SECONDS = 30     # Visual message display duration
 VOICE_REPEAT_SECONDS = 3         # Voice repeats every 3 seconds
 MAX_VOICE_REPEATS = 3            # Maximum voice repeats for success/already marked
