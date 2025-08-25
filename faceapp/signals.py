@@ -125,4 +125,4 @@ def mirror_attendance_to_session_table(sender, instance, created, **kwargs):
     except Exception as e:
         print(f"❌ Error mirroring attendance for {person.name}: {e}")
 
-print("📡 Face Recognition Attendance Signals Loaded Successfully!")
+print(" Face Recognition Attendance Signals Loaded Successfully!")

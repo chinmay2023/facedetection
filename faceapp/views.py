@@ -1,4 +1,4 @@
-# faceapp/views.py - SECURITY FIXED: Unknown Person Detection
+# faceapp/views.py - FIXED: 12-hour renewal + Day-specific Hindi TTS
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -12,15 +12,14 @@ import numpy as np
 from PIL import Image
 import face_recognition
 import logging
+from datetime import timedelta
 
-# Import your existing models and utilities
 from .models import (
     KnownPerson, TejgyanSession, Attendance,
     MA_Attendance, SSP1_Attendance, SSP2_Attendance, 
     HS1_Attendance, HS2_Attendance
 )
 
-# 🔥 IMPORT HINDI MESSAGES
 from .hindi_messages import (
     get_person_not_found_message,
     get_blacklist_message,
@@ -30,7 +29,6 @@ from .hindi_messages import (
     get_system_error_message
 )
 
-# Safe imports with fallbacks
 try:
     from .utils import encode_face_image
 except ImportError:
@@ -43,46 +41,23 @@ except ImportError:
     def speak(message):
         print(f"Voice: {message}")
 
-# Set up logging
 logger = logging.getLogger(__name__)
 
 def attendance_interface(request):
     """
     Render the main face recognition attendance interface
-    This displays the beautiful UI with webcam and form
     """
     try:
-        # Get active session safely
-        try:
-            active_session = TejgyanSession.objects.filter(is_active=True).first()
-        except Exception:
-            active_session = None
-        
-        # Get today's attendance count safely
-        today = timezone.now().date()
-        try:
-            today_attendance_count = Attendance.objects.filter(
-                timestamp__date=today
-            ).count()
-        except Exception:
-            today_attendance_count = 0
-        
-        # Get total active users safely
-        try:
-            active_users_count = KnownPerson.objects.filter(
-                is_active=True,
-                is_blacklisted=False
-            ).count()
-        except Exception:
-            active_users_count = 0
+        active_session = TejgyanSession.objects.filter(is_active=True).first()
+        today = timezone.localdate()
         
         context = {
             'active_session': active_session,
             'session_name': active_session.session_name if active_session else 'No Active Session',
             'session_type': active_session.session_type if active_session else 'None',
             'conducted_by': active_session.conducted_by if active_session else 'Unknown',
-            'today_attendance': today_attendance_count,
-            'active_users': active_users_count,
+            'today_attendance': Attendance.objects.filter(timestamp__date=today).count(),
+            'active_users': KnownPerson.objects.filter(is_active=True, is_blacklisted=False).count(),
             'current_date': today.strftime('%B %d, %Y'),
         }
         
@@ -91,7 +66,6 @@ def attendance_interface(request):
         
     except Exception as e:
         logger.error(f"Error in attendance_interface: {e}")
-        # Return basic context if error occurs
         context = {
             'active_session': None,
             'session_name': 'System Error',
@@ -99,7 +73,7 @@ def attendance_interface(request):
             'conducted_by': 'System',
             'today_attendance': 0,
             'active_users': 0,
-            'current_date': timezone.now().strftime('%B %d, %Y'),
+            'current_date': timezone.localdate().strftime('%B %d, %Y'),
             'error_message': 'Please contact administrator'
         }
         return render(request, 'faceapp/attendance.html', context)
@@ -108,13 +82,11 @@ def attendance_interface(request):
 @require_http_methods(["POST"])
 def recognize_face_api(request):
     """
-    🔥 ENHANCED: Face recognition API with Hindi voice messages
-    Website displays English - Voice speaks Hindi
+    Face recognition API with Hindi voice messages
     """
     try:
         logger.info("Face recognition API called")
         
-        # Parse the incoming JSON data
         data = json.loads(request.body)
         image_data = data.get('image')
         
@@ -123,11 +95,10 @@ def recognize_face_api(request):
             return JsonResponse({
                 'success': False,
                 'error_type': 'no_image',
-                'message': 'No image data provided',  # English for website
-                'hindi_voice_message': 'कृपया अपनी तस्वीर प्रदान करें, धन्यवाद।'  # Hindi for voice
+                'message': 'No image data provided',
+                'hindi_voice_message': 'कृपया अपनी तस्वीर प्रदान करें, धन्यवाद।'
             })
         
-        # Process the base64 image
         face_encoding = process_webcam_image(image_data)
         
         if face_encoding is None:
@@ -135,11 +106,10 @@ def recognize_face_api(request):
             return JsonResponse({
                 'success': False,
                 'error_type': 'face_not_found',
-                'message': 'No face detected in image',  # English for website
-                'hindi_voice_message': 'कृपया अपना चेहरा कैमरे के सामने स्पष्ट रूप से दिखाएं, धन्यवाद।'  # Hindi for voice
+                'message': 'No face detected in image',
+                'hindi_voice_message': 'कृपया अपना चेहरा कैमरे के सामने स्पष्ट रूप से दिखाएं, धन्यवाद।'
             })
         
-        # 🔒 SECURITY FIXED: Find matching person with proper unknown detection
         recognized_person = find_matching_person(face_encoding)
         
         if not recognized_person:
@@ -147,48 +117,43 @@ def recognize_face_api(request):
             return JsonResponse({
                 'success': False,
                 'error_type': 'person_not_recognized',
-                'message': 'Face not recognized. Please register first.',  # English for website
-                'hindi_voice_message': get_person_not_found_message()  # 🔥 Hindi for voice
+                'message': 'Face not recognized. Please register first.',
+                'hindi_voice_message': get_person_not_found_message()
             })
         
         logger.info(f"Person recognized: {recognized_person.name}")
         
-        # 🔥 CHECK PERSON STATUS WITH HINDI VOICE MESSAGES
-        
-        # Check if person is inactive AND blacklisted
+        # Check person status
         if not recognized_person.is_active and recognized_person.is_blacklisted:
             logger.warning(f"Person {recognized_person.name} is inactive and blacklisted")
             return JsonResponse({
                 'success': False,
                 'error_type': 'person_inactive_blacklisted',
-                'message': 'Account is inactive and blacklisted. Contact administrator.',  # English for website
+                'message': 'Account is inactive and blacklisted. Contact administrator.',
                 'user_data': get_user_display_data(recognized_person),
-                'hindi_voice_message': get_inactive_and_blacklisted_message(recognized_person.name)  # 🔥 Hindi for voice
+                'hindi_voice_message': get_inactive_and_blacklisted_message(recognized_person.name)
             })
         
-        # Check if person is inactive
         if not recognized_person.is_active:
             logger.warning(f"Person {recognized_person.name} is inactive")
             return JsonResponse({
                 'success': False,
                 'error_type': 'person_inactive',
-                'message': 'Account inactive. Contact administrator.',  # English for website
+                'message': 'Account inactive. Contact administrator.',
                 'user_data': get_user_display_data(recognized_person),
-                'hindi_voice_message': get_inactive_message(recognized_person.name)  # 🔥 Hindi for voice
+                'hindi_voice_message': get_inactive_message(recognized_person.name)
             })
         
-        # Check if person is blacklisted
         if recognized_person.is_blacklisted:
             logger.warning(f"Person {recognized_person.name} is blacklisted")
             return JsonResponse({
                 'success': False,
                 'error_type': 'person_blacklisted',
-                'message': 'Access denied. Contact administrator.',  # English for website
+                'message': 'Access denied. Contact administrator.',
                 'user_data': get_user_display_data(recognized_person),
-                'hindi_voice_message': get_blacklist_message(recognized_person.name)  # 🔥 Hindi for voice
+                'hindi_voice_message': get_blacklist_message(recognized_person.name)
             })
         
-        # Get active session safely
         try:
             active_session = TejgyanSession.objects.filter(is_active=True).first()
         except Exception:
@@ -199,12 +164,11 @@ def recognize_face_api(request):
             return JsonResponse({
                 'success': False,
                 'error_type': 'no_active_session',
-                'message': 'No active session found. Contact administrator.',  # English for website
+                'message': 'No active session found. Contact administrator.',
                 'user_data': get_user_display_data(recognized_person),
-                'hindi_voice_message': get_no_session_message(recognized_person.name)  # 🔥 Hindi for voice
+                'hindi_voice_message': get_no_session_message(recognized_person.name)
             })
         
-        # 🎉 ALL CHECKS PASSED - RETURN SUCCESS WITH USER DATA
         user_data = get_user_display_data(recognized_person, active_session)
         
         logger.info(f"Successfully recognized {recognized_person.name}")
@@ -218,7 +182,6 @@ def recognize_face_api(request):
                 'type': active_session.session_type,
                 'conducted_by': active_session.conducted_by
             },
-            # 🔥 NO HINDI MESSAGE FOR SUCCESS - Will be handled by attendance API
         })
         
     except json.JSONDecodeError as e:
@@ -226,16 +189,16 @@ def recognize_face_api(request):
         return JsonResponse({
             'success': False,
             'error_type': 'invalid_data',
-            'message': 'Invalid JSON data',  # English for website
-            'hindi_voice_message': 'डेटा में कुछ समस्या है। कृपया दोबारा कोशिश करें, धन्यवाद।'  # Hindi for voice
+            'message': 'Invalid JSON data',
+            'hindi_voice_message': 'डेटा में कुछ समस्या है। कृपया दोबारा कोशिश करें, धन्यवाद।'
         })
     except Exception as e:
         logger.error(f"Error in recognize_face_api: {e}")
         return JsonResponse({
             'success': False,
             'error_type': 'system_error',
-            'message': 'System error occurred. Please try again.',  # English for website
-            'hindi_voice_message': get_system_error_message('उपयोगकर्ता')  # 🔥 Hindi for voice (generic user)
+            'message': 'System error occurred. Please try again.',
+            'hindi_voice_message': get_system_error_message('उपयोगकर्ता')
         })
 
 def process_webcam_image(image_data):
@@ -245,23 +208,17 @@ def process_webcam_image(image_data):
     try:
         logger.info("Processing webcam image")
         
-        # Remove data URL prefix if present
         if 'data:image' in image_data:
             image_data = image_data.split(',')[1]
         
-        # Decode base64 image
         image_bytes = base64.b64decode(image_data)
         image = Image.open(io.BytesIO(image_bytes))
-        
-        # Convert PIL image to numpy array for face_recognition
         image_array = np.array(image)
-        
-        # Get face encodings using face_recognition
         face_encodings = face_recognition.face_encodings(image_array)
         
         if face_encodings:
             logger.info(f"Found {len(face_encodings)} face(s) in image")
-            return face_encodings[0]  # Return first face found
+            return face_encodings[0]
         else:
             logger.info("No faces found in image")
             return None
@@ -272,13 +229,11 @@ def process_webcam_image(image_data):
 
 def find_matching_person(face_encoding, tolerance=0.6):
     """
-    🔒 SECURITY FIXED: Find matching person with proper unknown detection
-    Only returns a person if the match is genuinely good (distance < 0.6)
+    Find matching person with proper unknown detection
     """
     try:
         logger.info("🔍 Searching for matching person in database")
         
-        # Get all active users with face encodings
         known_persons = KnownPerson.objects.filter(
             is_active=True,
             is_blacklisted=False,
@@ -300,7 +255,6 @@ def find_matching_person(face_encoding, tolerance=0.6):
                     logger.warning(f"⚠️ {person.name} has no face encoding")
                     continue
                 
-                # Convert stored binary encoding back to numpy array
                 try:
                     stored_encoding = np.frombuffer(person.encoding, dtype=np.float64)
                     logger.info(f"📊 Loaded encoding for {person.name}: {len(stored_encoding)} features")
@@ -308,18 +262,15 @@ def find_matching_person(face_encoding, tolerance=0.6):
                     logger.error(f"❌ Failed to load encoding for {person.name}: {encoding_error}")
                     continue
                 
-                # Calculate face distance (lower = more similar)
                 try:
                     distances = face_recognition.face_distance([stored_encoding], face_encoding)
-                    distance = distances[0]  # Extract single distance value
+                    distance = distances[0]
                     
                     logger.info(f"📏 Distance for {person.name}: {distance:.4f} (tolerance: {tolerance})")
                     
-                    # 🔒 SECURITY FIX: Only consider it a match if distance is genuinely good
                     if distance <= tolerance:
                         logger.info(f"✅ POTENTIAL MATCH: {person.name} (distance: {distance:.4f})")
                         
-                        # Keep track of best match (lowest distance)
                         if distance < best_distance:
                             best_match = person
                             best_distance = distance
@@ -335,10 +286,8 @@ def find_matching_person(face_encoding, tolerance=0.6):
                 logger.error(f"❌ Error processing person {person.name}: {person_error}")
                 continue
         
-        # 🔒 SECURITY FIX: Add additional verification before returning match
         if best_match and best_distance <= tolerance:
-            # 🔒 EXTRA SECURITY: Add confidence threshold
-            confidence_threshold = 0.55  # Even stricter than tolerance
+            confidence_threshold = 0.55
             
             if best_distance <= confidence_threshold:
                 logger.info(f"🎉 HIGH CONFIDENCE MATCH: {best_match.name} (distance: {best_distance:.4f})")
@@ -346,7 +295,7 @@ def find_matching_person(face_encoding, tolerance=0.6):
             elif best_distance <= tolerance:
                 logger.warning(f"⚠️ LOW CONFIDENCE MATCH: {best_match.name} (distance: {best_distance:.4f})")
                 logger.warning(f"🚫 REJECTED: Distance {best_distance:.4f} > confidence threshold {confidence_threshold}")
-                return None  # 🔒 SECURITY: Reject low-confidence matches
+                return None
             else:
                 logger.info(f"❌ MATCH REJECTED: {best_match.name} (distance: {best_distance:.4f} > tolerance: {tolerance})")
                 return None
@@ -354,7 +303,7 @@ def find_matching_person(face_encoding, tolerance=0.6):
             logger.info(f"❌ NO MATCHING PERSON FOUND - CORRECTLY IDENTIFYING AS UNKNOWN")
             logger.info(f"📊 Best distance was: {best_distance:.4f} (needed: ≤ {tolerance})")
             logger.info(f"🔒 SECURITY: Properly returning None for unknown face")
-            return None  # 🔒 SECURITY: Properly return None for unknown faces
+            return None
         
     except Exception as e:
         logger.error(f"❌ Critical error in find_matching_person: {e}")
@@ -362,21 +311,18 @@ def find_matching_person(face_encoding, tolerance=0.6):
 
 def get_user_display_data(person, session=None):
     """
-    Get user data for display in the form - Safe version without problematic method calls
+    Get user data for display in the form
     """
     try:
-        # Get spiritual level safely
         try:
             spiritual_level = getattr(person, 'shivir', None) or 'New User'
         except:
             spiritual_level = 'New User'
         
-        # Get current session info if provided
         session_info = 'No Active Session'
         if session:
             session_info = f"{session.session_name} ({session.session_type})"
         
-        # Determine status safely
         if not person.is_active:
             reason = getattr(person, 'deactivated_reason', None)
             status = f"❌ Inactive" + (f" - {reason}" if reason else "")
@@ -386,7 +332,6 @@ def get_user_display_data(person, session=None):
         else:
             status = "✅ Active Member"
         
-        # Return clean data that matches JavaScript expectations
         user_data = {
             'name': person.name or 'Unknown',
             'email': person.email or 'Unknown',
@@ -410,124 +355,211 @@ def get_user_display_data(person, session=None):
             'current_session': 'Error'
         }
 
+def get_session_max_days(session_type):
+    """
+    Get maximum days for each session type
+    """
+    session_days = {
+        'MA': 5,
+        'SSP1': 2,
+        'SSP2': 2,
+        'HS1': 2,
+        'HS2': 2,
+        'FESTIVAL': 1
+    }
+    return session_days.get(session_type, 1)
+
+def get_hindi_session_name(session_type):
+    """
+    Get Hindi session names
+    """
+    hindi_names = {
+        'MA': 'एम ए शिविर',
+        'SSP1': 'एस एस पी वन शिविर',
+        'SSP2': 'एस एस पी टू शिविर',
+        'HS1': 'हायर शिविर वन',
+        'HS2': 'हायर शिविर टू',
+        'FESTIVAL': 'फेस्टिवल सत्र'
+    }
+    return hindi_names.get(session_type, session_type)
+
+def generate_hindi_attendance_message(person_name, session_type, day_number, is_last_day):
+    """
+    Generate day-specific Hindi TTS messages
+    """
+    hindi_session = get_hindi_session_name(session_type)
+    
+    if is_last_day:
+        # Last day completion messages
+        if session_type == 'MA':
+            return f"हैप्पी थॉट्स {person_name}! {hindi_session} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। एम ए शिविर सफलतापूर्वक पूरा हो गया है। एस एस पी वन शिविर के लिए शुभकामनाएं, धन्यवाद।"
+        elif session_type == 'SSP1':
+            return f"हैप्पी थॉट्स {person_name}! {hindi_session} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। एस एस पी वन शिविर सफलतापूर्वक पूरा हो गया है। एस एस पी टू शिविर के लिए शुभकामनाएं, धन्यवाद।"
+        elif session_type == 'SSP2':
+            return f"हैप्पी थॉट्स {person_name}! {hindi_session} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। एस एस पी टू शिविर सफलतापूर्वक पूरा हो गया है। हायर शिविर वन के लिए शुभकामनाएं, धन्यवाद।"
+        elif session_type == 'HS1':
+            return f"हैप्पी थॉट्स {person_name}! {hindi_session} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। हायर शिविर वन सफलतापूर्वक पूरा हो गया है। हायर शिविर टू के लिए शुभकामनाएं, धन्यवाद।"
+        elif session_type == 'HS2':
+            return f"हैप्पी थॉट्स {person_name}! {hindi_session} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। हायर शिविर टू सफलतापूर्वक पूरा हो गया है। आपकी आध्यात्मिक यात्रा जारी रहे, धन्यवाद।"
+        else:
+            return f"हैप्पी थॉट्स {person_name}! {hindi_session} की उपस्थिति सफलतापूर्वक दर्ज हो गई है। धन्यवाद।"
+    else:
+        # Regular day messages
+        return f"हैप्पी थॉट्स {person_name}! {hindi_session} के दिन {day_number} की उपस्थिति सफलतापूर्वक दर्ज हो गई है, धन्यवाद।"
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def mark_attendance_web(request):
     """
-    SIMPLIFIED: Enhanced attendance marking for web interface
-    This works with your existing attendance system
+    FIXED: Enhanced attendance marking with proper 12-hour renewal and day-specific Hindi TTS
     """
     try:
         data = json.loads(request.body)
         person_email = data.get('email')
-        session_type = data.get('session_type', 'MA')  # Default to MA
+        session_type = data.get('session_type', 'MA')
         
         if not person_email:
             return JsonResponse({
                 'success': False,
                 'error': 'Email required'
-            })
+            }, status=400)
         
-        # Get person
         try:
             person = KnownPerson.objects.get(email=person_email)
         except KnownPerson.DoesNotExist:
             return JsonResponse({
                 'success': False,
                 'error': 'Person not found'
-            })
+            }, status=404)
         
-        logger.info(f"Attempting to mark attendance for {person.name}")
+        session = TejgyanSession.objects.filter(is_active=True).first()
+        if not session:
+            return JsonResponse({
+                'success': False,
+                'error': 'No active session'
+            }, status=400)
         
-        # Try to call your existing attendance API
-        try:
-            from .api_views import mark_attendance
+        if person.is_blacklisted:
+            return JsonResponse({
+                'success': False,
+                'error': 'Blacklisted'
+            }, status=403)
+        
+        if not person.is_active:
+            return JsonResponse({
+                'success': False,
+                'error': 'Inactive'
+            }, status=403)
+        
+        # FIXED: Proper 12-hour renewal check
+        cooldown_hours = getattr(settings, "ATTENDANCE_COOLDOWN", 12)
+    
+        # Get all attendance records for this person and session, ordered by timestamp
+        past_attendance = Attendance.objects.filter(
+            person=person, 
+            session=session
+        ).order_by('timestamp')
+        
+        # Check if 12-hour cooldown period has passed since last attendance
+        if past_attendance.exists():
+            last_attendance = past_attendance.last()
+            time_since_last = timezone.now() - last_attendance.timestamp
+            hours_since_last = time_since_last.total_seconds() / 3600
             
-            # Create a mock request object for the existing API
-            class MockRequest:
-                def __init__(self, data):
-                    self.data = data
+            logger.info(f"Hours since last attendance: {hours_since_last:.2f}")
             
-            mock_request = MockRequest({
-                'email': person_email,
-                'shivir': session_type
-            })
-            
-            # Call your existing attendance marking function
-            response = mark_attendance(mock_request)
-            
-            # Process the response
-            if hasattr(response, 'content'):
-                response_data = json.loads(response.content.decode())
-            else:
-                response_data = response
-            
-            # Add voice announcement
-            if response_data.get('success'):
-                voice_message = f"Welcome {person.name}! Attendance recorded successfully."
-                
-                # Trigger voice announcement
-                try:
-                    speak(voice_message)
-                except Exception as e:
-                    logger.warning(f"Voice announcement failed: {e}")
-                
-                response_data['voice_message'] = voice_message
-                logger.info(f"Attendance marked successfully for {person.name}")
-            else:
-                logger.warning(f"Attendance marking failed for {person.name}: {response_data.get('error', 'Unknown error')}")
-            
-            return JsonResponse(response_data)
-            
-        except ImportError:
-            # If api_views doesn't exist, create basic attendance record
-            logger.warning("api_views.mark_attendance not found, creating basic record")
-            
-            # Create basic attendance record
-            today = timezone.now().date()
-            attendance, created = Attendance.objects.get_or_create(
-                person=person,
-                timestamp__date=today,
-                defaults={'timestamp': timezone.now()}
-            )
-            
-            if created:
-                voice_message = f"Welcome {person.name}! Attendance recorded."
-                try:
-                    speak(voice_message)
-                except Exception:
-                    pass
-                
-                return JsonResponse({
-                    'success': True,
-                    'message': f'Attendance marked for {person.name}',
-                    'voice_message': voice_message
-                })
-            else:
+            if hours_since_last < cooldown_hours:
+                remaining_hours = cooldown_hours - hours_since_last
+                remaining_minutes = int(remaining_hours * 60)
                 return JsonResponse({
                     'success': False,
-                    'error': 'Attendance already marked today'
-                })
+                    'error': 'cooldown_active',
+                    'message': f'Please wait {remaining_minutes} more minutes',
+                    'wait_minutes': remaining_minutes
+                }, status=429)
+        
+        # Calculate the day number for this attendance
+        day_number = past_attendance.count() + 1
+        max_days = get_session_max_days(session.session_type)
+        
+        logger.info(f"Day number: {day_number}, Max days: {max_days}")
+        
+        # Check if session is already completed
+        if day_number > max_days:
+            return JsonResponse({
+                'success': False,
+                'error': 'session_completed',
+                'message': f'{session.session_type} session already completed'
+            }, status=409)
+        
+        # Check if attendance already marked for today (additional safety check)
+        today = timezone.localdate()
+        today_attendance = Attendance.objects.filter(
+            person=person,
+            session=session,
+            timestamp__date=today
+        ).exists()
+        
+        if today_attendance:
+            return JsonResponse({
+                'success': False,
+                'error': 'already_marked_today',
+                'message': 'Attendance already marked for today'
+            }, status=409)
+        
+        # Create attendance record
+        attendance = Attendance.objects.create(
+            person=person,
+            session=session,
+            timestamp=timezone.now()
+        )
+        
+        # Generate day-specific Hindi TTS message
+        is_last_day = (day_number == max_days)
+        hindi_message = generate_hindi_attendance_message(
+            person.name, 
+            session.session_type, 
+            day_number, 
+            is_last_day
+        )
+        
+        # Play Hindi voice message
+        try:
+            speak(hindi_message)
+        except Exception as voice_error:
+            logger.warning(f"Voice announcement failed: {voice_error}")
+        
+        logger.info(f"Attendance marked successfully for {person.name}, Day {day_number}/{max_days}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Attendance marked for day {day_number} of {session.session_type}',
+            'day_number': day_number,
+            'max_days': max_days,
+            'is_last_day': is_last_day,
+            'voice_message': hindi_message,
+            'session_completed': is_last_day
+        })
         
     except json.JSONDecodeError as e:
         logger.error(f"Invalid JSON in attendance request: {e}")
         return JsonResponse({
             'success': False,
             'error': 'Invalid JSON data'
-        })
+        }, status=400)
     except Exception as e:
-        logger.error(f"Error in mark_attendance_web: {e}")
+        logger.error(f"Error in mark_attendance_web: {e}", exc_info=True)
         return JsonResponse({
             'success': False,
             'error': 'System error occurred'
-        })
+        }, status=500)
 
 def get_attendance_stats(request):
     """
     Get real-time attendance statistics for dashboard
     """
     try:
-        today = timezone.now().date()
+        today = timezone.localdate()
         
         stats = {
             'today_total': Attendance.objects.filter(timestamp__date=today).count(),
@@ -535,7 +567,6 @@ def get_attendance_stats(request):
             'session_attendance': 0
         }
         
-        # Get active session safely
         try:
             active_session = TejgyanSession.objects.filter(is_active=True).first()
         except Exception:
@@ -560,12 +591,11 @@ def get_attendance_stats(request):
         logger.error(f"Error getting attendance stats: {e}")
         return JsonResponse({'success': False, 'error': 'Failed to get stats'})
 
-# 🔥 ENHANCED: ElevenLabs Hindi voice generation endpoint
 @csrf_exempt
 @require_http_methods(["POST"])
 def generate_hindi_voice(request):
     """
-    Generate Hindi voice using ElevenLabs API - Enhanced version
+    Generate Hindi voice using ElevenLabs API
     """
     try:
         data = json.loads(request.body)
@@ -576,7 +606,6 @@ def generate_hindi_voice(request):
         
         logger.info(f"🔊 Generating Hindi voice for: {hindi_text}")
         
-        # Use your existing voice_helper.py with Hindi text
         try:
             from .voice_helper import speak
             speak(hindi_text)

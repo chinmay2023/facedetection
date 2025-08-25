@@ -8,4 +8,4 @@ class FaceappConfig(AppConfig):
     def ready(self):
         # 🔥 THIS IS THE CRITICAL LINE - Import signals to register them
         import faceapp.signals
-        print("📡 FaceApp signals registered successfully!")
+        print(" FaceApp signals registered successfully!")
