@@ -1,4 +1,4 @@
-# faceapp/views.py - ENHANCED WITH COMPLETE HINDI VOICE INTEGRATION
+# faceapp/views.py - SECURITY FIXED: Unknown Person Detection
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -139,11 +139,11 @@ def recognize_face_api(request):
                 'hindi_voice_message': 'कृपया अपना चेहरा कैमरे के सामने स्पष्ट रूप से दिखाएं, धन्यवाद।'  # Hindi for voice
             })
         
-        # Find matching person in database
+        # 🔒 SECURITY FIXED: Find matching person with proper unknown detection
         recognized_person = find_matching_person(face_encoding)
         
         if not recognized_person:
-            logger.info("Face not recognized")
+            logger.info("🔒 SECURITY: Face not recognized - Unknown person detected")
             return JsonResponse({
                 'success': False,
                 'error_type': 'person_not_recognized',
@@ -270,10 +270,10 @@ def process_webcam_image(image_data):
         logger.error(f"Error processing webcam image: {e}")
         return None
 
-def find_matching_person(face_encoding, tolerance=0.8):
+def find_matching_person(face_encoding, tolerance=0.6):
     """
-    Find matching person in database using face encoding comparison
-    FIXED VERSION - Resolves distance calculation bug and improves logging
+    🔒 SECURITY FIXED: Find matching person with proper unknown detection
+    Only returns a person if the match is genuinely good (distance < 0.6)
     """
     try:
         logger.info("🔍 Searching for matching person in database")
@@ -315,7 +315,7 @@ def find_matching_person(face_encoding, tolerance=0.8):
                     
                     logger.info(f"📏 Distance for {person.name}: {distance:.4f} (tolerance: {tolerance})")
                     
-                    # Check if this is a match
+                    # 🔒 SECURITY FIX: Only consider it a match if distance is genuinely good
                     if distance <= tolerance:
                         logger.info(f"✅ POTENTIAL MATCH: {person.name} (distance: {distance:.4f})")
                         
@@ -335,14 +335,26 @@ def find_matching_person(face_encoding, tolerance=0.8):
                 logger.error(f"❌ Error processing person {person.name}: {person_error}")
                 continue
         
-        # Return the best match if found
-        if best_match:
-            logger.info(f"🎉 FINAL MATCH FOUND: {best_match.name} (distance: {best_distance:.4f})")
-            return best_match
+        # 🔒 SECURITY FIX: Add additional verification before returning match
+        if best_match and best_distance <= tolerance:
+            # 🔒 EXTRA SECURITY: Add confidence threshold
+            confidence_threshold = 0.55  # Even stricter than tolerance
+            
+            if best_distance <= confidence_threshold:
+                logger.info(f"🎉 HIGH CONFIDENCE MATCH: {best_match.name} (distance: {best_distance:.4f})")
+                return best_match
+            elif best_distance <= tolerance:
+                logger.warning(f"⚠️ LOW CONFIDENCE MATCH: {best_match.name} (distance: {best_distance:.4f})")
+                logger.warning(f"🚫 REJECTED: Distance {best_distance:.4f} > confidence threshold {confidence_threshold}")
+                return None  # 🔒 SECURITY: Reject low-confidence matches
+            else:
+                logger.info(f"❌ MATCH REJECTED: {best_match.name} (distance: {best_distance:.4f} > tolerance: {tolerance})")
+                return None
         else:
-            logger.info(f"❌ No matching person found (tried {known_persons.count()} persons)")
-            logger.info(f"📊 Tolerance used: {tolerance} (try increasing to 0.9 if needed)")
-            return None
+            logger.info(f"❌ NO MATCHING PERSON FOUND - CORRECTLY IDENTIFYING AS UNKNOWN")
+            logger.info(f"📊 Best distance was: {best_distance:.4f} (needed: ≤ {tolerance})")
+            logger.info(f"🔒 SECURITY: Properly returning None for unknown face")
+            return None  # 🔒 SECURITY: Properly return None for unknown faces
         
     except Exception as e:
         logger.error(f"❌ Critical error in find_matching_person: {e}")
