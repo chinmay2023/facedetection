@@ -9,12 +9,12 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
-#facerecognizer/settings.py
+# facerecognizer/settings.py - ENHANCED WITH YOUR ELEVENLABS API INTEGRATION
 from pathlib import Path
+import os  # Added for media/static configuration
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
@@ -27,9 +27,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -53,10 +51,11 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'facerecognizer.urls'
 
+# ✅ CORRECTED: Templates configuration with proper DIRS setting
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],  # 🔧 FIXED: Added templates directory
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -64,6 +63,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media',     # For media files
+                'django.template.context_processors.static',    # For static files
             ],
         },
     },
@@ -71,10 +72,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'facerecognizer.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -86,10 +85,8 @@ DATABASES = {
     }
 }
 
-
 # Password validation
 # https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -105,27 +102,170 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/3.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'Asia/Kolkata' 
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
-
 STATIC_URL = '/static/'
+
+# Static files configuration for web interface
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # Global static files directory
+]
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # For production deployment
+
+# Media files configuration for face images
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# 🔥 YOUR ELEVENLABS API INTEGRATION - NEWLY ADDED
+ELEVENLABS_CONFIG = {
+    'API_KEY': 'sk_11de27c9cee94fe617e3f768b6124bc857dea2a18f1c8af4',  # 🔥 YOUR NEW API KEY
+    'VOICE_ID': 'H6QPv2pQZDcGqLwDTIJQ',  # 🔥 YOUR VOICE ID (Kanishka)
+    'BASE_URL': 'https://api.elevenlabs.io/v1',
+    'MODEL_ID': 'eleven_multilingual_v2',  # Best for Hindi
+    'VOICE_SETTINGS': {
+        'stability': 0.85,
+        'similarity_boost': 0.90,
+        'style': 1.0,
+        'use_speaker_boost': True
+    }
+}
+
+# Face Recognition System Settings
+FACE_RECOGNITION_SETTINGS = {
+    'TOLERANCE': 0.6,                    # Face matching tolerance (0.6 = strict, 1.0 = loose)
+    'MODEL': 'hog',                      # 'hog' for speed, 'cnn' for accuracy
+    'MAX_FACE_SIZE': 2048,               # Maximum image dimensions for processing
+    'ENCODING_CACHE_TIMEOUT': 3600,      # Cache face encodings for 1 hour
+    'DETECTION_INTERVAL': 2000,          # Webcam detection interval in milliseconds
+}
+
+# 🔥 ENHANCED: Voice System Integration Settings with YOUR ElevenLabs API
+VOICE_SYSTEM = {
+    'ENABLED': True,                     # Enable/disable voice announcements
+    'PRIMARY_PROVIDER': 'elevenlabs',    # Primary voice provider
+    'ELEVENLABS_API_KEY': ELEVENLABS_CONFIG['API_KEY'],     # 🔥 YOUR API KEY
+    'ELEVENLABS_VOICE_ID': ELEVENLABS_CONFIG['VOICE_ID'],   # 🔥 YOUR VOICE ID
+    'DEFAULT_VOICE': 'Kanishka',         # 🔥 YOUR VOICE NAME
+    'LANGUAGE': 'hi-IN',                 # Hindi language
+    'VOLUME': 0.8,                       # Voice volume (0.0 to 1.0)
+    'ANNOUNCEMENT_DELAY': 1000,          # Delay before voice announcement (ms)
+    'FALLBACK_TO_BROWSER': True,         # Use browser TTS if ElevenLabs fails
+}
+
+# 🔥 HINDI VOICE MESSAGES CONFIGURATION
+HINDI_VOICE_CONFIG = {
+    'ENABLED': True,
+    'API_PROVIDER': 'elevenlabs',
+    'API_KEY': ELEVENLABS_CONFIG['API_KEY'],        # 🔥 YOUR API KEY
+    'VOICE_ID': ELEVENLABS_CONFIG['VOICE_ID'],      # 🔥 YOUR VOICE ID
+    'MODEL_ID': ELEVENLABS_CONFIG['MODEL_ID'],
+    'VOICE_SETTINGS': ELEVENLABS_CONFIG['VOICE_SETTINGS'],
+    'TIMEOUT': 10,  # API request timeout in seconds
+    'RETRY_ATTEMPTS': 3,
+    'CACHE_AUDIO': False,  # Whether to cache generated audio files
+}
+
+# REST Framework configuration for APIs
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',  # For face recognition APIs
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.FileUploadParser',
+    ],
+}
+
+# Logging configuration for face recognition system
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'face_recognition.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'faceapp': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        #  NEW: ElevenLabs voice logging
+        'elevenlabs': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
+# File Upload Settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB max file size for face images
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024   # 10 MB max request size
+
+# Session Settings for web interface
+SESSION_COOKIE_AGE = 86400  # 24 hours session timeout
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Development-specific settings
+if DEBUG:
+    # Disable CSRF for development (face recognition APIs)
+    CSRF_COOKIE_SECURE = False
+    CSRF_COOKIE_HTTPONLY = False
+    
+    # Allow all hosts in development
+    ALLOWED_HOSTS = ['*']
+    
+    # Create logs directory if it doesn't exist
+    (BASE_DIR / 'logs').mkdir(exist_ok=True)
+
+# 🔥 PRODUCTION SETTINGS (for deployment)
+else:
+    # Production security settings
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    
+    # Set your production domain
+    ALLOWED_HOSTS = ['yourdomain.com', 'www.yourdomain.com']
+    
+    # Production logging to file only
+    LOGGING['handlers']['console']['level'] = 'WARNING'

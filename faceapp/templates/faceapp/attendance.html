@@ -1,0 +1,85 @@
+<!--facerecognizer/templates/faceapp/attendance.html-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tejgyan Foundation - Face Recognition Attendance</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'faceapp/css/style.css' %}">
+</head>
+<body>
+    <div class="container">
+        <!-- Left Panel - User Information -->
+        <div class="left-panel">
+            <div class="form-container">
+                <h2 class="form-title">Attendance System</h2>
+                <p class="form-subtitle">Face recognition enabled for automatic attendance</p>
+                
+                <div class="user-form">
+                    <div class="input-group">
+                        <input type="text" id="userName" class="form-input" placeholder="Full Name" readonly>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="email" id="userEmail" class="form-input" placeholder="Email Address" readonly>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="userCity" class="form-input" placeholder="City" readonly>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="userShivir" class="form-input" placeholder="Shivir Level" readonly>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="userStatus" class="form-input" placeholder="Status" readonly>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="sessionInfo" class="form-input" placeholder="Current Session" readonly>
+                    </div>
+                    
+                    <div class="attendance-status" id="attendanceStatus">
+                        <div class="status-message">Ready to scan face</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Webcam Feed -->
+        <div class="right-panel">
+            <div class="security-section">
+                <div class="security-header">
+                    <span class="security-text">Live</span>
+                    <span class="security-status">Recognition Active</span>
+                </div>
+                
+                <div class="webcam-container">
+                    <video id="webcam" autoplay muted playsinline></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    
+                    <div class="webcam-overlay">
+                        <div class="scan-indicator">
+                            <div class="scan-line"></div>
+                        </div>
+                        <div class="webcam-status" id="webcamStatus">
+                            Looking for faces...
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="security-icon">
+                    <div class="lock-icon">
+                        <div class="lock-body"></div>
+                        <div class="lock-shackle"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{% static 'faceapp/js/attendance.js' %}"></script>
+</body>
+</html>
