@@ -17,20 +17,20 @@ logger = logging.getLogger('elevenlabs')
 # Setup ElevenLabs client with YOUR credentials
 try:
     client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
-    print("✅ ElevenLabs client initialized successfully with YOUR credentials")
-    print(f"🔑 Using YOUR API Key: {ELEVENLABS_API_KEY[:20]}...")
-    print(f"🎤 Using YOUR Voice ID: {YOUR_VOICE_ID}")
+    print(" ElevenLabs client initialized successfully with YOUR credentials")
+    print(f"Using YOUR API Key: {ELEVENLABS_API_KEY[:20]}...")
+    print(f"Using YOUR Voice ID: {YOUR_VOICE_ID}")
 except Exception as e:
-    print(f"❌ ElevenLabs initialization error: {e}")
+    print(f"ElevenLabs initialization error: {e}")
     client = None
 
 # Setup pygame for audio playback
 try:
     pygame.mixer.init()
     pygame.mixer.music.set_volume(0.8)
-    print("✅ Pygame audio system initialized")
+    print(" Pygame audio system initialized")
 except Exception as e:
-    print(f"❌ Pygame initialization error: {e}")
+    print(f"Pygame initialization error: {e}")
 
 def speak(message):
     """
@@ -38,14 +38,14 @@ def speak(message):
     Usage: speak("हैप्पी थॉट्स! आपकी उपस्थिति दर्ज हो गई है।")
     """
     if not client:
-        print("❌ ElevenLabs client not available - using fallback")
+        print(" ElevenLabs client not available - using fallback")
         speak_fallback(message)
         return
     
     try:
-        print(f"🎤 Speaking with YOUR voice: {message}")
-        print(f"🔑 Using YOUR API Key: {ELEVENLABS_API_KEY[:20]}...")
-        print(f"🎵 Using YOUR Voice ID: {YOUR_VOICE_ID}")
+        print(f" Speaking with YOUR voice: {message}")
+        print(f" Using YOUR API Key: {ELEVENLABS_API_KEY[:20]}...")
+        print(f" Using YOUR Voice ID: {YOUR_VOICE_ID}")
         
         # Generate voice audio with YOUR credentials using new API
         audio = client.text_to_speech.convert(
@@ -319,6 +319,6 @@ if __name__ == "__main__":
     create_voice_settings_file()  # Create settings file
     test_voice_system()  # Test the system
 else:
-    print("📦 YOUR ElevenLabs voice helper loaded successfully")
-    print(f"🔑 Using API Key: {ELEVENLABS_API_KEY[:20]}...")
-    print(f"🎤 Using Voice: {SINGLE_VOICE} ({YOUR_VOICE_ID})")
+    print(" YOUR ElevenLabs voice helper loaded successfully")
+    print(f" Using API Key: {ELEVENLABS_API_KEY[:20]}...")
+    print(f" Using Voice: {SINGLE_VOICE} ({YOUR_VOICE_ID})")
