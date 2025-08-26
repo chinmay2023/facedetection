@@ -5,7 +5,6 @@ import pytz  # ✅ For timezone conversion
 from django.utils import timezone  # ✅ For timezone handling
 
 
-
 class KnownPerson(models.Model):
     GENDER_CHOICES = [
         ('M', 'Male'),
@@ -29,7 +28,6 @@ class KnownPerson(models.Model):
     is_active = models.BooleanField(default=True, help_text="Designates whether this user is active. Inactive users won't appear in face recognition.")
     deactivated_date = models.DateTimeField(blank=True, null=True, help_text="Date when person was deactivated")
     deactivated_reason = models.CharField(max_length=200, blank=True, null=True, help_text="Reason for deactivation")
-
 
     def __str__(self):
         status_parts = []
@@ -317,11 +315,69 @@ class KnownPerson(models.Model):
         }
         
         return summary
+    
+    # 🔧 NEW: SIMPLIFIED SHIVIR DISPLAY METHODS (ONLY ADDITION)
+    def get_last_completed_session(self):
+        """
+        Returns the most recently completed session for display.
+        Returns None if user is a repeater or has no completed sessions.
+        """
+        # Check if user is a repeater - if yes, return None
+        repeater_models = [
+            (MA_Repeaters, 'MA'),
+            (SSP1_Repeaters, 'SSP1'),
+            (SSP2_Repeaters, 'SSP2'),
+            (HS1_Repeaters, 'HS1'),
+            (HS2_Repeaters, 'HS2')
+        ]
+        
+        for RepeaterModel, _ in repeater_models:
+            if RepeaterModel.objects.filter(person=self).exists():
+                return None  # User is repeater, don't show background session
+        
+        # Define attendance models with their display names
+        attendance_models = [
+            (MA_Attendance, 'MA'),
+            (SSP1_Attendance, 'SSP1'), 
+            (SSP2_Attendance, 'SSP2'),
+            (HS1_Attendance, 'HS1'),
+            (HS2_Attendance, 'HS2')
+        ]
+        
+        last_completed = None
+        latest_date = None
+        
+        # Check each attendance model for completed sessions
+        for AttendanceModel, session_name in attendance_models:
+            try:
+                completed_session = AttendanceModel.objects.filter(
+                    person=self,
+                    is_completed=True
+                ).order_by('-attendance_date').first()
+                
+                if completed_session:
+                    if latest_date is None or completed_session.attendance_date > latest_date:
+                        latest_date = completed_session.attendance_date
+                        last_completed = session_name
+            except:
+                continue
+        
+        return last_completed
 
+    def get_shivir_display(self):
+        """
+        Returns simplified shivir display for admin and frontend
+        """
+        last_session = self.get_last_completed_session()
+        return last_session if last_session else "New User"
+
+    @property
+    def shivir_background_display(self):
+        """Simple display of last completed session"""
+        return self.get_shivir_display()
 
 
 # 🗄️ SEPARATE REGULAR ATTENDANCE TABLES FOR EACH SESSION TYPE
-
 
 class MA_Attendance(models.Model):
     """Track daily MA Shivir attendance (5 days total)"""
@@ -369,7 +425,6 @@ class MA_Attendance(models.Model):
                 print(f"✅ Shivir field automatically updated for {self.person.name}")
 
 
-
 class SSP1_Attendance(models.Model):
     """Track daily SSP1 attendance (2 days total)"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='ssp1_attendance')
@@ -406,7 +461,6 @@ class SSP1_Attendance(models.Model):
         if self.is_completed and not was_completed_before:
             print(f"🎉 SSP1 completed for {self.person.name}! Triggering auto-update...")
             self.person.update_shivir_field_on_completion('SSP1')
-
 
 
 class SSP2_Attendance(models.Model):
@@ -447,7 +501,6 @@ class SSP2_Attendance(models.Model):
             self.person.update_shivir_field_on_completion('SSP2')
 
 
-
 class HS1_Attendance(models.Model):
     """Track daily Higher Shivir 1 attendance (2 days total)"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='hs1_attendance')
@@ -484,7 +537,6 @@ class HS1_Attendance(models.Model):
         if self.is_completed and not was_completed_before:
             print(f"🎉 HS1 completed for {self.person.name}! Triggering auto-update...")
             self.person.update_shivir_field_on_completion('HS1')
-
 
 
 class HS2_Attendance(models.Model):
@@ -525,9 +577,7 @@ class HS2_Attendance(models.Model):
             self.person.update_shivir_field_on_completion('HS2')
 
 
-
 # 🔄 ENHANCED REPEATER TABLES WITH SESSION TRACKING COLUMNS
-
 
 class MA_Repeaters(models.Model):
     """Track MA Shivir repeat attendance with dynamic days gap + session tracking"""
@@ -570,7 +620,6 @@ class MA_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
-
 class SSP1_Repeaters(models.Model):
     """Track SSP1 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='ssp1_repeaters')
@@ -606,7 +655,6 @@ class SSP1_Repeaters(models.Model):
         else:
             months = self.days_gap // 30
             return f"{months} month{'s' if months > 1 else ''}"
-
 
 
 class SSP2_Repeaters(models.Model):
@@ -646,7 +694,6 @@ class SSP2_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
-
 class HS1_Repeaters(models.Model):
     """Track Higher Shivir 1 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='hs1_repeaters')
@@ -684,7 +731,6 @@ class HS1_Repeaters(models.Model):
             return f"{months} month{'s' if months > 1 else ''}"
 
 
-
 class HS2_Repeaters(models.Model):
     """Track Higher Shivir 2 repeat attendance with dynamic days gap + session tracking"""
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE, related_name='hs2_repeaters')
@@ -720,7 +766,6 @@ class HS2_Repeaters(models.Model):
         else:
             months = self.days_gap // 30
             return f"{months} month{'s' if months > 1 else ''}"
-
 
 
 # TejgyanSession Model for Sirshree's Session Management (Enhanced)
@@ -826,7 +871,6 @@ class TejgyanSession(models.Model):
         return durations.get(self.session_type, 1)
 
 
-
 # Updated Attendance Model with NULL Session Support (Enhanced)
 class Attendance(models.Model):
     person = models.ForeignKey('KnownPerson', on_delete=models.CASCADE)
@@ -847,7 +891,6 @@ class Attendance(models.Model):
         default=True, 
         help_text="True if marked by face recognition, False if manually added"
     )
-
 
     def __str__(self):
         # Handle both NULL and active sessions gracefully
