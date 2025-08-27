@@ -11,9 +11,11 @@ from .models import (
 from .utils import encode_face_image
 import pytz
 
+
 # ================================
-# KNOWN PERSON ADMIN - FIXED DYNAMIC COMPLETED FIELD
+# KNOWN PERSON ADMIN - FIXED DYNAMIC COMPLETED FIELD + CLEAN SHIVIR DISPLAY
 # ================================
+
 
 @admin.register(KnownPerson)
 class KnownPersonAdmin(admin.ModelAdmin):
@@ -22,7 +24,7 @@ class KnownPersonAdmin(admin.ModelAdmin):
         'email', 
         'city',
         'gender',
-        'shivir',
+        'shivir_clean_display',  # 🔧 FIXED: Shows clean shivir without "_COMPLETED"
         'get_spiritual_level',
         'next_eligible_session',        
         'get_dynamic_completion_status',   # 🔥 FIXED: Now fully dynamic
@@ -106,6 +108,13 @@ class KnownPersonAdmin(admin.ModelAdmin):
         level = obj.get_shivir_background_level()
         return level if level else "New User"
     get_spiritual_level.short_description = 'Spiritual Level'
+    
+    # 🔧 NEW: Clean Shivir Display Method for Admin
+    def shivir_clean_display(self, obj):
+        """Display clean shivir without '_COMPLETED' suffixes"""
+        return obj.get_clean_shivir_display()
+    shivir_clean_display.short_description = 'Shivir Background'
+    shivir_clean_display.admin_order_field = 'shivir'  # Allow sorting by original field
     
     @admin.display(description='Next Eligible')
     def next_eligible_session(self, obj):
@@ -282,9 +291,11 @@ class KnownPersonAdmin(admin.ModelAdmin):
         self.message_user(request, f"{count} person(s) removed from blacklist.", messages.SUCCESS)
     unblacklist_selected.short_description = "Remove from blacklist"
 
+
 # ================================
 # ATTENDANCE ADMIN CLASSES
 # ================================
+
 
 @admin.register(Attendance)
 class AttendanceAdmin(admin.ModelAdmin):
@@ -351,6 +362,7 @@ class AttendanceAdmin(admin.ModelAdmin):
             return "Valid"
     person_status.short_description = 'Status'
 
+
 class BaseSessionAttendanceAdmin(admin.ModelAdmin):
     list_display = [
         'person_name',
@@ -382,29 +394,36 @@ class BaseSessionAttendanceAdmin(admin.ModelAdmin):
         return "No reference"
     session_reference_name.short_description = 'Session Reference'
 
+
 @admin.register(MA_Attendance)
 class MA_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
+
 
 @admin.register(SSP1_Attendance) 
 class SSP1_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
 
+
 @admin.register(SSP2_Attendance)
 class SSP2_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
+
 
 @admin.register(HS1_Attendance)
 class HS1_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
 
+
 @admin.register(HS2_Attendance)
 class HS2_AttendanceAdmin(BaseSessionAttendanceAdmin):
     pass
 
+
 # ================================
 # ✅ ENHANCED REPEATER ADMIN CLASSES WITH NEW COLUMNS
 # ================================
+
 
 class BaseRepeaterAdmin(admin.ModelAdmin):
     list_display = [
@@ -470,6 +489,7 @@ class BaseRepeaterAdmin(admin.ModelAdmin):
     session_reference_display.short_description = 'Linked Session'
     session_reference_display.admin_order_field = 'session_reference__session_name'
 
+
 # ✅ ENHANCED: All Repeater Admin Classes with Session-Specific Details
 @admin.register(MA_Repeaters)
 class MA_RepeatersAdmin(BaseRepeaterAdmin):
@@ -483,6 +503,7 @@ class MA_RepeatersAdmin(BaseRepeaterAdmin):
             return f"MA Repeat {obj.repeat_count} - Day {obj.day_number}/5"
     get_ma_specific_info.short_description = 'MA Details'
 
+
 @admin.register(SSP1_Repeaters)
 class SSP1_RepeatersAdmin(BaseRepeaterAdmin):
     list_display = BaseRepeaterAdmin.list_display + ['get_ssp1_specific_info']
@@ -494,6 +515,7 @@ class SSP1_RepeatersAdmin(BaseRepeaterAdmin):
         else:
             return f"SSP1 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
     get_ssp1_specific_info.short_description = 'SSP1 Details'
+
 
 @admin.register(SSP2_Repeaters)
 class SSP2_RepeatersAdmin(BaseRepeaterAdmin):
@@ -507,6 +529,7 @@ class SSP2_RepeatersAdmin(BaseRepeaterAdmin):
             return f"SSP2 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
     get_ssp2_specific_info.short_description = 'SSP2 Details'
 
+
 @admin.register(HS1_Repeaters)
 class HS1_RepeatersAdmin(BaseRepeaterAdmin):
     list_display = BaseRepeaterAdmin.list_display + ['get_hs1_specific_info']
@@ -518,6 +541,7 @@ class HS1_RepeatersAdmin(BaseRepeaterAdmin):
         else:
             return f"HS1 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
     get_hs1_specific_info.short_description = 'HS1 Details'
+
 
 @admin.register(HS2_Repeaters)
 class HS2_RepeatersAdmin(BaseRepeaterAdmin):
@@ -531,9 +555,11 @@ class HS2_RepeatersAdmin(BaseRepeaterAdmin):
             return f"HS2 Repeat {obj.repeat_count} - Day {obj.day_number}/2"
     get_hs2_specific_info.short_description = 'HS2 Details'
 
+
 # ================================
 # TEJGYAN SESSION ADMIN
 # ================================
+
 
 @admin.register(TejgyanSession)
 class TejgyanSessionAdmin(admin.ModelAdmin):
@@ -621,6 +647,7 @@ class TejgyanSessionAdmin(admin.ModelAdmin):
             messages.WARNING
         )
     deactivate_all_sessions.short_description = "Deactivate all sessions"
+
 
 admin.site.site_header = "Tejgyan Foundation - Face Recognition Attendance System"
 admin.site.site_title = "Tejgyan Foundation Admin"

@@ -375,6 +375,38 @@ class KnownPerson(models.Model):
     def shivir_background_display(self):
         """Simple display of last completed session"""
         return self.get_shivir_display()
+    
+    # 🔧 NEW: CLEAN SHIVIR DISPLAY METHODS (REMOVES "_COMPLETED" SUFFIXES)
+    def get_clean_shivir_display(self):
+        """
+        Returns cleaned shivir display without '_COMPLETED' suffixes
+        Example: 'MA, MA_COMPLETED, SSP1_COMPLETED' -> 'MA, SSP1'
+        """
+        if not self.shivir:
+            return "New User"
+        
+        # Split the shivir field by comma and clean each part
+        parts = [part.strip() for part in self.shivir.split(',')]
+        
+        # Remove '_COMPLETED' suffix and duplicates
+        cleaned_parts = []
+        seen = set()
+        
+        for part in parts:
+            # Remove '_COMPLETED' suffix
+            clean_part = part.replace('_COMPLETED', '').strip()
+            
+            # Only add if not empty and not already seen
+            if clean_part and clean_part not in seen:
+                cleaned_parts.append(clean_part)
+                seen.add(clean_part)
+        
+        return ', '.join(cleaned_parts) if cleaned_parts else "New User"
+
+    @property
+    def shivir_clean_display(self):
+        """Property for easy access to clean shivir display"""
+        return self.get_clean_shivir_display()
 
 
 # 🗄️ SEPARATE REGULAR ATTENDANCE TABLES FOR EACH SESSION TYPE
