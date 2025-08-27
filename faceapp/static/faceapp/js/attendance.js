@@ -1,7 +1,7 @@
 // Face Recognition Attendance System - ENHANCED WITH ALL FACE_RECOGNIZE_LIVE.PY FEATURES
 // Website displays English - AI Voice speaks Hindi with YOUR credentials
 // 🚀 NEW: Smart Voice Repetition System + Session Day Progress + Advanced State Management
-// 🔧 COMPLETELY FIXED: AI Voice & Error Display Issues Resolved
+// 🔧 COMPLETELY FIXED: AI Voice & Error Display Issues Resolved + CLEAN SHIVIR DISPLAY
 
 class AttendanceSystem {
     constructor() {
@@ -527,6 +527,36 @@ class AttendanceSystem {
         }
     }
 
+    // 🔧 FIXED: CLEAN SHIVIR DISPLAY FUNCTION (FRONTEND FIX)
+    cleanShivirDisplay(shivirData) {
+        console.log('🧹 Cleaning shivir display:', shivirData);
+        
+        if (!shivirData || shivirData === '') {
+            return 'New User';
+        }
+        
+        // Handle string input - split by comma and clean each part
+        const parts = shivirData.toString().split(',');
+        const cleanedParts = [];
+        const seen = new Set();
+        
+        for (let part of parts) {
+            // 🔧 CRITICAL FIX: Remove '_COMPLETED' suffix correctly (without extra backslash)
+            let cleanPart = part.trim().replace(/_COMPLETED/g, '').trim();
+            
+            // Only add if not empty and not already seen
+            if (cleanPart && cleanPart !== '' && !seen.has(cleanPart)) {
+                cleanedParts.push(cleanPart);
+                seen.add(cleanPart);
+            }
+        }
+        
+        const result = cleanedParts.length > 0 ? cleanedParts.join(', ') : 'New User';
+        console.log('✅ Cleaned shivir display:', result);
+        return result;
+    }
+
+    // 🔧 FIXED: FILL USER FORM WITH CLEAN SHIVIR DISPLAY
     fillUserForm(userData) {
         console.log('📝 Filling form for user:', userData.name);
         
@@ -535,11 +565,17 @@ class AttendanceSystem {
         document.getElementById('userName').value = userData.name || '';
         document.getElementById('userEmail').value = userData.email || '';
         document.getElementById('userCity').value = userData.city || '';
-        document.getElementById('userShivir').value = userData.shivir_level || '';
+        
+        // 🔧 CRITICAL FIX: Clean shivir display before setting in form
+        const rawShivir = userData.shivir_level || userData.shivir || '';
+        const cleanShivir = this.cleanShivirDisplay(rawShivir);
+        document.getElementById('userShivir').value = cleanShivir;
+        
         document.getElementById('userStatus').value = userData.status || '';
         document.getElementById('sessionInfo').value = userData.current_session || '';
         
         console.log('✅ Form filled successfully for:', userData.name);
+        console.log('🧹 Shivir display cleaned:', rawShivir, '→', cleanShivir);
     }
 
     // 🔧 ENHANCED: RECOGNITION ERROR HANDLER WITH BETTER VOICE INTEGRATION
@@ -896,7 +932,7 @@ class AttendanceSystem {
 // Initialize the enhanced attendance system when page loads
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Initializing Enhanced Face Recognition Attendance System with FIXED error handling...');
-    console.log('🔧 COMPLETELY FIXED: AI Voice & Error Display Issues Resolved!');
+    console.log('🔧 COMPLETELY FIXED: AI Voice & Error Display Issues Resolved + CLEAN SHIVIR DISPLAY!');
     const attendanceSystem = new AttendanceSystem();
     
     // Start message cleanup system
@@ -905,6 +941,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Enhanced system ready with:');
     console.log('   🔧 FIXED Error Message Display');
     console.log('   🔊 FIXED AI Voice for All Scenarios');
+    console.log('   🧹 FIXED Clean Shivir Display (No "_COMPLETED")');
     console.log('   🎵 Smart Voice Repetition System');
     console.log('   📊 Session Day Progress Tracking');
     console.log('   🗄️ Message Cache System');
